@@ -79,3 +79,5 @@ obj-$(CONFIG_TOUCHSCREEN_TPS6507X)	+= tps6507x-ts.o
 obj-$(CONFIG_TOUCHSCREEN_MSM_LEGACY)		+= msm_touch.o
 obj-$(CONFIG_TOUCHSCREEN_CY8C_TS)	+= cy8c_ts.o
 obj-$(CONFIG_TOUCHSCREEN_CYTTSP_I2C_QC)       += cyttsp-i2c-qc.o
+
+obj-$(CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_RMI4_I2C)    += synaptics_dsx_rmi4_i2c.o

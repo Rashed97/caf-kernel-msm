@@ -67,6 +67,8 @@ VREG_CONSUMERS(L8) = {
 VREG_CONSUMERS(L9) = {
 	REGULATOR_SUPPLY("8038_l9",		NULL),
 	REGULATOR_SUPPLY("vdd_ana",		"3-004a"),
+	REGULATOR_SUPPLY("vdd_ana",		"3-0020"),
+	REGULATOR_SUPPLY("vdd_ana",		"3-0070"),
 	REGULATOR_SUPPLY("vdd",			"3-0024"),
 	REGULATOR_SUPPLY("cam_vana",		"4-001a"),
 	REGULATOR_SUPPLY("cam_vana",		"4-006c"),
@@ -86,6 +88,8 @@ VREG_CONSUMERS(L10) = {
 VREG_CONSUMERS(L11) = {
 	REGULATOR_SUPPLY("8038_l11",		NULL),
 	REGULATOR_SUPPLY("vdd_dig",		"3-004a"),
+	REGULATOR_SUPPLY("vdd_dig",		"3-0020"),
+	REGULATOR_SUPPLY("vdd_dig",		"3-0070"),
 	REGULATOR_SUPPLY("iris_vddio",		"wcnss_wlan.0"),
 	REGULATOR_SUPPLY("riva_vddpx",		"wcnss_wlan.0"),
 	REGULATOR_SUPPLY("sdc_vdd_io",		"msm_sdcc.1"),
@@ -205,6 +209,8 @@ VREG_CONSUMERS(LVS1) = {
 VREG_CONSUMERS(LVS2) = {
 	REGULATOR_SUPPLY("8038_lvs2",		NULL),
 	REGULATOR_SUPPLY("vcc_i2c",		"3-004a"),
+	REGULATOR_SUPPLY("vcc_i2c",		"3-0020"),
+	REGULATOR_SUPPLY("vcc_i2c",		"3-0070"),
 	REGULATOR_SUPPLY("vcc_i2c",		"3-0024"),
 	REGULATOR_SUPPLY("vcc_i2c",		"0-0048"),
 	REGULATOR_SUPPLY("vddio",		"12-0018"),

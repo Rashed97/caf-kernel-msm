@@ -11,6 +11,21 @@ menuconfig INPUT_TOUCHSCREEN
 
 if INPUT_TOUCHSCREEN
 
+config TOUCHSCREEN_SYNAPTICS_DSX_RMI4_I2C
+    tristate "Synaptics DSX I2C touchscreen"
+    default n
+    help
+      Say Y here if you have a Synaptics DSX I2C touchscreen
+      connected to your system.
+
+      If unsure, say N.
+
+      To compile this driver as a module, choose M here: the
+      module will be called synaptics_dsx_rmi4_i2c.
+
+
+
+
 config TOUCHSCREEN_88PM860X
 	tristate "Marvell 88PM860x touchscreen"
 	depends on MFD_88PM860X
@@ -945,5 +960,31 @@ config TOUCHSCREEN_FT5X06
 
          To compile this driver as a module, choose M here: the
          module will be called ft5x06_ts.
+
+config TOUCHSCREEN_SYNAPTICS_DSX_RMI4_I2C
+	tristate "Synaptics DSX I2C touchscreen"
+	depends on I2C
+	help
+	  Say Y here if you have a Synaptics DSX I2C touchscreen
+	  connected to your system.
+
+	  If unsure, say N.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called synaptics_dsx_rmi4_i2c.
+
+config TOUCHSCREEN_SYNAPTICS_DSX_RMI4_DEV
+	tristate "Synaptics I2C touchscreen char device"
+	depends on TOUCHSCREEN_SYNAPTICS_DSX_RMI4_I2C
+	help
+	  This enables support for character device channel for Synaptics RMI
+	  touchscreens.
+
+config TOUCHSCREEN_SYNAPTICS_DSX_RMI4_FW_UPDATE
+	tristate "Synaptics I2C touchscreen firmware update"
+	depends on TOUCHSCREEN_SYNAPTICS_DSX_RMI4_I2C
+	help
+	  This enables support for firmware update for Synaptics RMI
+	  touchscreens.
 
 endif
