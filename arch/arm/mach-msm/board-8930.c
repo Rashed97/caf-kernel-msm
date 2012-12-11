@@ -102,6 +102,10 @@
 #include "board-8930.h"
 #include "acpuclock-krait.h"
 
+#ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_RMI4_I2C
+#include <linux/input/synaptics_dsx.h>
+#endif
+
 static struct platform_device msm_fm_platform_init = {
 	.name = "iris_fm",
 	.id   = -1,
@@ -2051,6 +2055,64 @@ static struct i2c_board_info mxt_device_info_8930[] __initdata = {
 	},
 };
 
+/* 	Synaptics Thin Driver	*/
+#ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_RMI4_I2C
+static int synaptics_gpio_setup(unsigned gpio, bool configure)
+{
+	int retval=0;
+	if (configure)
+	{
+		retval = gpio_request(gpio, "rmi4_attn");
+		if (retval) {
+			pr_err("%s: Failed to get attn gpio %d. Code: %d.",
+			       __func__, gpio, retval);
+			return retval;
+		}
+
+        retval = gpio_direction_input(gpio);
+        if (retval) {
+            pr_err("%s: Failed to setup attn gpio %d. Code: %d.",
+                   __func__, gpio, retval);
+            gpio_free(gpio);
+        }
+
+	} else {
+		pr_warn("%s: No way to deconfigure gpio %d.",
+		       __func__, gpio);
+	}
+
+	return retval;
+}
+
+#define S7300_ADDR	0x20
+#define S7300_ATTN	11
+
+static unsigned char S7300_f1a_button_codes[] = {};
+
+static struct synaptics_rmi_f1a_button_map S7300_f1a_button_map = {
+	.nbuttons = ARRAY_SIZE(S7300_f1a_button_codes),
+	.map = S7300_f1a_button_codes,
+};
+
+static struct synaptics_dsx_platform_data dsx_platformdata = {
+	.irq_type = IRQF_TRIGGER_FALLING,
+	.gpio = S7300_ATTN,
+	.gpio_config = synaptics_gpio_setup,
+	.f1a_button_map = &S7300_f1a_button_map,
+};
+static struct i2c_board_info bus2_i2c_devices[] = {
+#ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_RMI4_I2C
+     /* SYNAPTICS I2C */
+     {
+         I2C_BOARD_INFO("synaptics_dsx_i2c", S7300_ADDR),
+         .platform_data = &dsx_platformdata,
+     },
+#endif
+};
+
+#endif
+/* End of Synaptics change for beagle board */
+
 #define MHL_POWER_GPIO_PM8038	PM8038_GPIO_PM_TO_SYS(MHL_GPIO_PWR_EN)
 #define MHL_POWER_GPIO_PM8917	PM8917_GPIO_PM_TO_SYS(25)
 static struct msm_mhl_platform_data mhl_platform_data = {
@@ -2716,6 +2778,12 @@ static struct i2c_registry msm8960_i2c_devices[] __initdata = {
 		MSM_8930_GSBI3_QUP_I2C_BUS_ID,
 		mxt_device_info_8930,
 		ARRAY_SIZE(mxt_device_info_8930),
+	},
+	{
+		I2C_SURF | I2C_FFA | I2C_FLUID,
+		MSM_8930_GSBI3_QUP_I2C_BUS_ID,
+        bus2_i2c_devices,
+		ARRAY_SIZE(bus2_i2c_devices),
 	},
 	{
 		I2C_SURF | I2C_FFA | I2C_LIQUID | I2C_FLUID,
