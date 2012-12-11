@@ -1802,9 +1802,11 @@ static int pm_batt_power_get_property(struct power_supply *psy,
 			val->intval = value;
 		break;
 	case POWER_SUPPLY_PROP_TEMP:
-		rc = get_prop_batt_temp(chip, &value);
-		if (!rc)
-			val->intval = value;
+		/*  Keep batt temp on 30 degree to avoid auto shutdown issue, this is a temporary wordaround. 
+		    batt temp will read from battery gauge for this project in the feature. 
+		*/
+		//val->intval = get_prop_batt_temp(chip);
+		val->intval = 300;
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_FULL:
 		rc = get_prop_batt_fcc(chip);
