@@ -974,7 +974,7 @@ static struct resource resources_wcnss_wlan[] = {
 };
 
 static struct qcom_wcnss_opts qcom_wcnss_pdata = {
-	.has_48mhz_xo	= 1,
+	.has_48mhz_xo	= 0,
 };
 
 static struct platform_device msm_device_wcnss_wlan = {
