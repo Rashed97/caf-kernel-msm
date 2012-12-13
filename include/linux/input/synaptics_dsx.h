@@ -47,7 +47,9 @@ struct synaptics_dsx_platform_data {
 	bool regulator_en;
 	unsigned gpio;
 	int irq_type;
-	int (*gpio_config)(unsigned interrupt_gpio, bool configure);
+    int (*platform_init)(struct device *dev);
+    void (*platform_exit)(void);
+    int (*power_on)(bool on);
 	struct synaptics_rmi_f1a_button_map *f1a_button_map;
 };
 

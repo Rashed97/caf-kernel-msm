@@ -44,7 +44,6 @@
 #define TYPE_B_PROTOCOL
 #endif
 
-#define GBC_POWER_ON
 
 #define NO_0D_WHILE_2D
 
@@ -322,60 +321,6 @@ static struct device_attribute attrs[] = {
 static bool exp_fn_inited;
 static struct mutex exp_fn_list_mutex;
 static struct list_head exp_fn_list;
-
-#ifdef GBC_POWER_ON
-#define GBC_TP_REGULATOR_L9       "8038_l9"
-#define GBC_TP_REGULATOR_L11      "8038_l11"
-#define GBC_TP_REGULATOR_LVS1     "8038_lvs1"
-static struct regulator_bulk_data regs_ts[] = {
-     { .supply = GBC_TP_REGULATOR_L9, .min_uV = 0, .max_uV = 0 },
-     { .supply = GBC_TP_REGULATOR_L11, .min_uV = 0, .max_uV = 0 },
-     { .supply = GBC_TP_REGULATOR_LVS1, .min_uV = 0, .max_uV = 0 },
- };
-
-
-static int gbc_config_regulator(struct synaptics_rmi4_data *data)
-{
-    int rc;
-    rc = regulator_bulk_get(NULL, ARRAY_SIZE(regs_ts), regs_ts);
-    if (rc) {
-        pr_err("%s: could not get regulators: %d\n",
-                __func__, rc);
-        goto fail_regulator_get;
-    }
-
-    rc = regulator_bulk_set_voltage(ARRAY_SIZE(regs_ts), regs_ts);
-    if (rc) {
-        pr_err("%s: could not set voltages: %d\n",
-                __func__, rc);
-        goto fail_regulator_bukl_set_voltage;
-    }
-
-    return 0;
-fail_regulator_bukl_set_voltage:
-    regulator_bulk_free(ARRAY_SIZE(regs_ts), regs_ts);
-fail_regulator_get:
-    return rc;
-
-}
-
-static int gbc_power_on(struct synaptics_rmi4_data *data, bool on)
-{
-    int rc = on ?
-        regulator_bulk_enable(ARRAY_SIZE(regs_ts), regs_ts) :
-        regulator_bulk_disable(ARRAY_SIZE(regs_ts), regs_ts);
-
-    if (rc)
-        pr_err("%s: could not %sable regulators: %d\n",
-                __func__, on ? "en" : "dis", rc);
-    else
-        msleep(50);
-
-    return rc;
-}
-
-
-#endif
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
 static ssize_t synaptics_rmi4_full_pm_cycle_show(struct device *dev,
@@ -1624,7 +1569,7 @@ error_exit:
 static int synaptics_rmi4_alloc_fh(struct synaptics_rmi4_fn **fhandler,
 		struct synaptics_rmi4_fn_desc *rmi_fd, int page_number)
 {
-	*fhandler = kmalloc(sizeof(**fhandler), GFP_KERNEL);
+    *fhandler = kzalloc(sizeof(**fhandler), GFP_KERNEL);
 	if (!(*fhandler))
 		return -ENOMEM;
 
@@ -1892,10 +1837,12 @@ static int synaptics_rmi4_reset_device(struct synaptics_rmi4_data *rmi4_data)
 	msleep(100);
 
 	list_for_each_entry(fhandler, &rmi->support_fn_list, link) {
-		if (fhandler->fn_number == SYNAPTICS_RMI4_F1A)
+		if (fhandler->fn_number == SYNAPTICS_RMI4_F1A) {
 			synaptics_rmi4_f1a_kfree(fhandler);
-		else
-			kfree(fhandler->data);
+        } else {
+            if(fhandler->data)
+                kfree(fhandler->data);
+        }
 		kfree(fhandler);
 	}
 
@@ -2029,7 +1976,7 @@ EXPORT_SYMBOL(synaptics_rmi4_new_function);
 static int __devinit synaptics_rmi4_probe(struct i2c_client *client,
 		const struct i2c_device_id *dev_id)
 {
-	int retval;
+	int retval = -1;
 	unsigned char ii;
 	unsigned char attr_count;
 	struct synaptics_rmi4_f1a_handle *f1a;
@@ -2092,14 +2039,36 @@ static int __devinit synaptics_rmi4_probe(struct i2c_client *client,
 	rmi4_data->touch_stopped = false;
 	rmi4_data->sensor_sleep = false;
 	rmi4_data->irq_enabled = false;
+    rmi4_data->full_pm_cycle = true;
 
 	rmi4_data->i2c_read = synaptics_rmi4_i2c_read;
 	rmi4_data->i2c_write = synaptics_rmi4_i2c_write;
 	rmi4_data->irq_enable = synaptics_rmi4_irq_enable;
 	rmi4_data->reset_device = synaptics_rmi4_reset_device;
 
-    gbc_config_regulator(rmi4_data);
-    gbc_power_on(rmi4_data, true);
+    if(NULL == platform_data->platform_init)
+        goto err_platform_fn;
+    if(NULL == platform_data->platform_exit)
+        goto err_platform_fn;
+    if(NULL == platform_data->power_on)
+        goto err_platform_fn;
+
+    retval = platform_data->platform_init(&client->dev);
+    if (retval){
+		dev_err(&client->dev,
+				"%s: Failed to init platform code: %d\n",
+				__func__, retval);
+		goto err_platform_init;
+    }
+    if (platform_data->regulator_en) {
+        retval = platform_data->power_on(true);
+        if (retval) {
+            dev_err(&client->dev,
+                    "%s: Failed to power on code: %d\n",
+                    __func__, retval);
+            goto err_power_on;
+        }
+    }
 
 	init_waitqueue_head(&rmi4_data->wait);
 	mutex_init(&(rmi4_data->rmi4_io_ctrl_mutex));
@@ -2187,16 +2156,6 @@ static int __devinit synaptics_rmi4_probe(struct i2c_client *client,
 			&rmi4_data->det_work,
 			msecs_to_jiffies(EXP_FN_DET_INTERVAL));
 
-	if (platform_data->gpio_config) {
-		retval = platform_data->gpio_config(platform_data->gpio, true);
-		if (retval < 0) {
-			dev_err(&client->dev,
-					"%s: Failed to configure GPIO\n",
-					__func__);
-			goto err_gpio;
-		}
-	}
-
 	rmi4_data->irq = gpio_to_irq(platform_data->gpio);
 
 	retval = synaptics_rmi4_irq_enable(rmi4_data, true);
@@ -2227,7 +2186,6 @@ err_sysfs:
 	}
 
 err_enable_irq:
-err_gpio:
 	input_unregister_device(rmi4_data->input_dev);
 
 err_register_input:
@@ -2238,19 +2196,24 @@ err_query_device:
 	}
 
 	list_for_each_entry(fhandler, &rmi->support_fn_list, link) {
-		if (fhandler->fn_number == SYNAPTICS_RMI4_F1A)
+		if (fhandler->fn_number == SYNAPTICS_RMI4_F1A) {
 			synaptics_rmi4_f1a_kfree(fhandler);
-		else
-			kfree(fhandler->data);
+        } else {
+            if(fhandler->data)
+                kfree(fhandler->data);
+        }
 		kfree(fhandler);
 	}
 
 /*
 err_regulator:
 */
+err_power_on:
+    platform_data->platform_exit();
+err_platform_init:
+err_platform_fn:
 	input_free_device(rmi4_data->input_dev);
 	rmi4_data->input_dev = NULL;
-
 err_input_device:
 	kfree(rmi4_data);
 
@@ -2270,17 +2233,22 @@ err_input_device:
 static int __devexit synaptics_rmi4_remove(struct i2c_client *client)
 {
 	unsigned char attr_count;
-	struct synaptics_rmi4_fn *fhandler;
+    struct synaptics_rmi4_fn *fhandler;
 	struct synaptics_rmi4_data *rmi4_data = i2c_get_clientdata(client);
 	struct synaptics_rmi4_device_info *rmi;
 	const struct synaptics_dsx_platform_data *platform_data =
 			rmi4_data->board;
+
 
 	rmi = &(rmi4_data->rmi4_mod_info);
 
 	cancel_delayed_work_sync(&rmi4_data->det_work);
 	flush_workqueue(rmi4_data->det_workqueue);
 	destroy_workqueue(rmi4_data->det_workqueue);
+
+#ifdef CONFIG_HAS_EARLYSUSPEND
+    unregister_early_suspend(&rmi4_data->early_suspend);
+#endif
 
 	rmi4_data->touch_stopped = true;
 	wake_up(&rmi4_data->wait);
@@ -2294,26 +2262,25 @@ static int __devexit synaptics_rmi4_remove(struct i2c_client *client)
 
 	input_unregister_device(rmi4_data->input_dev);
 
-	if (platform_data->regulator_en) {
-		regulator_disable(rmi4_data->regulator);
-		regulator_put(rmi4_data->regulator);
-	}
-
 	list_for_each_entry(fhandler, &rmi->support_fn_list, link) {
-		if (fhandler->fn_number == SYNAPTICS_RMI4_F1A)
+		if (fhandler->fn_number == SYNAPTICS_RMI4_F1A) {
 			synaptics_rmi4_f1a_kfree(fhandler);
-		else
-			kfree(fhandler->data);
+        } else {
+            if(fhandler->data)
+                kfree(fhandler->data);
+        }
 		kfree(fhandler);
 	}
 
 	input_free_device(rmi4_data->input_dev);
 
-#ifdef GBC_POWER_ON
-    regulator_bulk_free(ARRAY_SIZE(regs_ts), regs_ts);
-#endif
-
-	kfree(rmi4_data);
+    if (platform_data->regulator_en && platform_data->power_on) {
+        platform_data->power_on(false);
+    }
+    if (platform_data->platform_exit) {
+        platform_data->platform_exit();
+    }
+    kfree(rmi4_data);
 
 	return 0;
 }
@@ -2423,6 +2390,8 @@ static void synaptics_rmi4_early_suspend(struct early_suspend *h)
 			container_of(h, struct synaptics_rmi4_data,
 			early_suspend);
 
+    printk(KERN_EMERG "%s %d %s\n", __func__, __LINE__, "");
+
 	rmi4_data->touch_stopped = true;
 	wake_up(&rmi4_data->wait);
 	synaptics_rmi4_irq_enable(rmi4_data, false);
@@ -2449,6 +2418,7 @@ static void synaptics_rmi4_late_resume(struct early_suspend *h)
 			container_of(h, struct synaptics_rmi4_data,
 			early_suspend);
 
+    printk(KERN_EMERG "%s %d %s\n", __func__, __LINE__, "");
 	if (rmi4_data->full_pm_cycle)
 		synaptics_rmi4_resume(&(rmi4_data->input_dev->dev));
 
@@ -2478,6 +2448,8 @@ static int synaptics_rmi4_suspend(struct device *dev)
 	const struct synaptics_dsx_platform_data *platform_data =
 			rmi4_data->board;
 
+    printk(KERN_EMERG "%s %d %s\n", __func__, __LINE__, "");
+
 	if (!rmi4_data->sensor_sleep) {
 		rmi4_data->touch_stopped = true;
 		wake_up(&rmi4_data->wait);
@@ -2485,9 +2457,8 @@ static int synaptics_rmi4_suspend(struct device *dev)
 		synaptics_rmi4_sensor_sleep(rmi4_data);
 	}
 
-	if (platform_data->regulator_en)
-		regulator_disable(rmi4_data->regulator);
-
+	if (platform_data->regulator_en && platform_data->power_on)
+        platform_data->power_on(false);
 	return 0;
 }
 
@@ -2507,8 +2478,10 @@ static int synaptics_rmi4_resume(struct device *dev)
 	const struct synaptics_dsx_platform_data *platform_data =
 			rmi4_data->board;
 
-	if (platform_data->regulator_en)
-		regulator_enable(rmi4_data->regulator);
+    printk(KERN_EMERG "%s %d %s\n", __func__, __LINE__, "");
+
+	if (platform_data->regulator_en && platform_data->power_on)
+        platform_data->power_on(true);
 
 	synaptics_rmi4_sensor_wake(rmi4_data);
 	rmi4_data->touch_stopped = false;
