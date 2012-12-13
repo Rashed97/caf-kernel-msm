@@ -102,7 +102,7 @@
 #include "board-8930.h"
 #include "acpuclock-krait.h"
 
-#ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_RMI4_I2C
+#if defined(CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_RMI4_I2C) || defined(CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_RMI4_I2C_MODULE)
 #include <linux/input/synaptics_dsx.h>
 #endif
 
@@ -2056,36 +2056,84 @@ static struct i2c_board_info mxt_device_info_8930[] __initdata = {
 };
 
 /* 	Synaptics Thin Driver	*/
-#ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_RMI4_I2C
-static int synaptics_gpio_setup(unsigned gpio, bool configure)
-{
-	int retval=0;
-	if (configure)
-	{
-		retval = gpio_request(gpio, "rmi4_attn");
-		if (retval) {
-			pr_err("%s: Failed to get attn gpio %d. Code: %d.",
-			       __func__, gpio, retval);
-			return retval;
-		}
-
-        retval = gpio_direction_input(gpio);
-        if (retval) {
-            pr_err("%s: Failed to setup attn gpio %d. Code: %d.",
-                   __func__, gpio, retval);
-            gpio_free(gpio);
-        }
-
-	} else {
-		pr_warn("%s: No way to deconfigure gpio %d.",
-		       __func__, gpio);
-	}
-
-	return retval;
-}
-
+#if defined(CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_RMI4_I2C) || defined(CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_RMI4_I2C_MODULE)
 #define S7300_ADDR	0x20
 #define S7300_ATTN	11
+
+#define TS_REGULATOR_L9       "vdd_ana"
+#define TS_REGULATOR_L11      "vdd_dig"
+#define TS_REGULATOR_LVS1     "ts_i2c"
+#define TS_REGULATOR_LVS2     "vcc_i2c"
+
+static struct regulator_bulk_data regs_ts[] = {
+      { .supply = TS_REGULATOR_L9, .min_uV = 2850000, .max_uV = 2850000 },
+      { .supply = TS_REGULATOR_L11, .min_uV = 1800000, .max_uV = 1800000 },
+      { .supply = TS_REGULATOR_LVS1, .min_uV = 0, .max_uV = 0 },
+      { .supply = TS_REGULATOR_LVS2, .min_uV = 0, .max_uV = 0 },
+};
+
+static int synaptics_ts_power_on(bool on)
+{
+    int retval = on ?
+        regulator_bulk_enable(ARRAY_SIZE(regs_ts), regs_ts) :
+        regulator_bulk_disable(ARRAY_SIZE(regs_ts), regs_ts);
+
+    if (retval)
+        pr_err("%s: could not %sable regulators: %d\n",
+                __func__, on ? "en" : "dis", retval);
+    else
+        msleep(50);
+
+    return retval;
+}
+
+static int synaptics_platform_init(struct device *dev)
+{
+    int retval;
+    retval = gpio_request(S7300_ATTN, "rmi4_attn");
+    if (retval) {
+        pr_err("%s: Failed to get attn gpio %d. Code: %d.",
+                __func__, S7300_ATTN, retval);
+        goto err_gpio_request_atten;
+    }
+
+    retval = gpio_direction_input(S7300_ATTN);
+    if (retval) {
+        pr_err("%s: Failed to setup attn gpio %d. Code: %d.",
+                __func__, S7300_ATTN, retval);
+        goto err_gpio_direction_input_attn;
+    }
+
+    retval = regulator_bulk_get(dev, ARRAY_SIZE(regs_ts), regs_ts);
+    if (retval) {
+        pr_err("%s: Failed to setup regulator Code: %d.",
+                __func__, retval);
+        goto err_regulator_bulk_get;
+    }
+
+    retval = regulator_bulk_set_voltage(ARRAY_SIZE(regs_ts), regs_ts);
+     if (retval) {
+         pr_err("%s: could not set voltages: %d\n",
+                 __func__, retval);
+         goto err_regulator_bukl_set_voltage;
+     }
+
+    return 0;
+err_regulator_bukl_set_voltage:
+    regulator_bulk_free(ARRAY_SIZE(regs_ts), regs_ts);
+err_regulator_bulk_get:
+err_gpio_direction_input_attn:
+    gpio_free(S7300_ATTN);
+err_gpio_request_atten:
+    return retval;
+}
+
+static void synaptics_platform_exit(void)
+{
+    regulator_bulk_free(ARRAY_SIZE(regs_ts), regs_ts);
+    gpio_free(S7300_ATTN);
+}
+
 
 static unsigned char S7300_f1a_button_codes[] = {};
 
@@ -2096,12 +2144,15 @@ static struct synaptics_rmi_f1a_button_map S7300_f1a_button_map = {
 
 static struct synaptics_dsx_platform_data dsx_platformdata = {
 	.irq_type = IRQF_TRIGGER_FALLING,
+    .regulator_en = true,
 	.gpio = S7300_ATTN,
-	.gpio_config = synaptics_gpio_setup,
+    .platform_init = synaptics_platform_init,
+    .platform_exit = synaptics_platform_exit,
+    .power_on = synaptics_ts_power_on,
 	.f1a_button_map = &S7300_f1a_button_map,
 };
 static struct i2c_board_info bus2_i2c_devices[] = {
-#ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_RMI4_I2C
+#if defined(CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_RMI4_I2C) || defined(CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_RMI4_I2C_MODULE)
      /* SYNAPTICS I2C */
      {
          I2C_BOARD_INFO("synaptics_dsx_i2c", S7300_ADDR),
