@@ -52,7 +52,7 @@
 
 #define MDP_VSYNC_GPIO 0
 
-#define MIPI_CMD_NOVATEK_QHD_PANEL_NAME	"mipi_cmd_novatek_qhd"
+#define MIPI_CMD_NOVATEK_QHD_PANEL_NAME	"mipi_video_chimei_wuxga"
 #define MIPI_VIDEO_NOVATEK_QHD_PANEL_NAME	"mipi_video_novatek_qhd"
 #define MIPI_VIDEO_TOSHIBA_WSVGA_PANEL_NAME	"mipi_video_toshiba_wsvga"
 #define MIPI_VIDEO_CHIMEI_WXGA_PANEL_NAME	"mipi_video_chimei_wxga"
@@ -148,10 +148,13 @@ static void pm8917_gpio_set_backlight(int bl_level)
  * appropriate function.
  */
 #define DISP_RST_GPIO 58
+#define DSI_LVDS_PWR_GPIO 7
+#define BACKLIGHT_PWR 8
+#define BACKLIGHT_EN 9
 #define DISP_3D_2D_MODE 1
 static int mipi_dsi_cdp_panel_power(int on)
 {
-	static struct regulator *reg_l8, *reg_l23, *reg_l2;
+	static struct regulator *reg_l8, *reg_l23, *reg_l2, *reg_l12;
 	/* Control backlight GPIO (24) directly when using PM8917 */
 	int gpio24 = PM8917_GPIO_PM_TO_SYS(24);
 	int rc;
@@ -181,6 +184,13 @@ static int mipi_dsi_cdp_panel_power(int on)
 				PTR_ERR(reg_l2));
 			return -ENODEV;
 		}
+		reg_l12 = regulator_get(&msm_mipi_dsi1_device.dev,
+				"dsi_lvds_vddc");
+		if (IS_ERR(reg_l12)) {
+			pr_err("could not get 8038_l2, rc = %ld\n",
+				PTR_ERR(reg_l2));
+			return -ENODEV;
+		}
 		rc = regulator_set_voltage(reg_l8, 2800000, 3000000);
 		if (rc) {
 			pr_err("set_voltage l8 failed, rc=%d\n", rc);
@@ -196,11 +206,23 @@ static int mipi_dsi_cdp_panel_power(int on)
 			pr_err("set_voltage l2 failed, rc=%d\n", rc);
 			return -EINVAL;
 		}
+		rc = regulator_set_voltage(reg_l12, 1200000, 1200000);
+		if (rc) {
+			pr_err("set_voltage l2 failed, rc=%d\n", rc);
+			return -EINVAL;
+		}
 		rc = gpio_request(DISP_RST_GPIO, "disp_rst_n");
 		if (rc) {
 			pr_err("request gpio DISP_RST_GPIO failed, rc=%d\n",
 				rc);
 			gpio_free(DISP_RST_GPIO);
+			return -ENODEV;
+		}
+		rc = gpio_request(DSI_LVDS_PWR_GPIO, "dsi_lvds_pwr");
+		if (rc) {
+			pr_err("request gpio (DSI_LVDS_PWR_GPIO failed, rc=%d\n",
+				rc);
+			gpio_free(DSI_LVDS_PWR_GPIO);
 			return -ENODEV;
 		}
 		rc = gpio_request(DISP_3D_2D_MODE, "disp_3d_2d");
@@ -227,6 +249,20 @@ static int mipi_dsi_cdp_panel_power(int on)
 			novatek_pdata.gpio_set_backlight =
 				pm8917_gpio_set_backlight;
 		}
+		rc = gpio_request(BACKLIGHT_PWR, "backlight_pwr");
+		if (rc) {
+			pr_err("%s.failed to get backlight_pwr=%d.\n",
+			       __func__, BACKLIGHT_PWR);
+			return -1;
+		}
+		gpio_direction_output(BACKLIGHT_PWR, 0);
+		rc = gpio_request(BACKLIGHT_EN, "backlight_en");
+		if (rc) {
+			pr_err("%s.failed to get backlight_en=%d.\n",
+			       __func__, BACKLIGHT_EN);
+			return -1;
+		}
+		gpio_direction_output(BACKLIGHT_EN, 0);
 		dsi_power_on = true;
 	}
 
@@ -246,6 +282,11 @@ static int mipi_dsi_cdp_panel_power(int on)
 			pr_err("set_optimum_mode l2 failed, rc=%d\n", rc);
 			return -EINVAL;
 		}
+		rc = regulator_set_optimum_mode(reg_l12, 100000);
+		if (rc < 0) {
+			pr_err("set_optimum_mode l2 failed, rc=%d\n", rc);
+			return -EINVAL;
+		}
 		rc = regulator_enable(reg_l8);
 		if (rc) {
 			pr_err("enable l8 failed, rc=%d\n", rc);
@@ -261,7 +302,17 @@ static int mipi_dsi_cdp_panel_power(int on)
 			pr_err("enable l2 failed, rc=%d\n", rc);
 			return -ENODEV;
 		}
+		rc = regulator_enable(reg_l12);
+		if (rc) {
+			pr_err("enable l2 failed, rc=%d\n", rc);
+			return -ENODEV;
+		}
+		gpio_direction_output(BACKLIGHT_PWR, 1);
+		usleep(20);
+		gpio_direction_output(BACKLIGHT_EN, 1);
 		usleep(10000);
+		gpio_set_value(DSI_LVDS_PWR_GPIO, 1);
+		usleep(10);
 		gpio_set_value(DISP_RST_GPIO, 1);
 		usleep(10);
 		gpio_set_value(DISP_RST_GPIO, 0);
@@ -270,9 +321,16 @@ static int mipi_dsi_cdp_panel_power(int on)
 		gpio_set_value(DISP_3D_2D_MODE, 1);
 		usleep(20);
 	} else {
-
+		gpio_direction_output(BACKLIGHT_PWR, 0);
+		gpio_direction_output(BACKLIGHT_EN, 0);
+		gpio_set_value(DSI_LVDS_PWR_GPIO, 0);
 		gpio_set_value(DISP_RST_GPIO, 0);
 
+		rc = regulator_disable(reg_l12);
+		if (rc) {
+			pr_err("disable reg_l2 failed, rc=%d\n", rc);
+			return -ENODEV;
+		}
 		rc = regulator_disable(reg_l2);
 		if (rc) {
 			pr_err("disable reg_l2 failed, rc=%d\n", rc);
@@ -299,6 +357,11 @@ static int mipi_dsi_cdp_panel_power(int on)
 			return -EINVAL;
 		}
 		rc = regulator_set_optimum_mode(reg_l2, 100);
+		if (rc < 0) {
+			pr_err("set_optimum_mode l2 failed, rc=%d\n", rc);
+			return -EINVAL;
+		}
+		rc = regulator_set_optimum_mode(reg_l12, 100);
 		if (rc < 0) {
 			pr_err("set_optimum_mode l2 failed, rc=%d\n", rc);
 			return -EINVAL;
@@ -484,6 +547,21 @@ static struct platform_device mipi_dsi_toshiba_panel_device = {
 	.dev = {
 		.platform_data = &toshiba_pdata,
 	}
+};
+
+#define LPM_CHANNEL 0
+static int dsi2lvds_gpio[2] = {
+	LPM_CHANNEL,/* Backlight PWM-ID=0 for PMIC-GPIO#24 */
+	0x1F08 /* DSI2LVDS Bridge GPIO Output, mask=0x1f, out=0x08 */
+};
+static struct msm_panel_common_pdata mipi_dsi2lvds_pdata = {
+	.gpio_num = dsi2lvds_gpio,
+};
+
+static struct platform_device mipi_dsi2lvds_bridge_device = {
+	.name = "mipi_tc358764",
+	.id = 0,
+	.dev.platform_data = &mipi_dsi2lvds_pdata,
 };
 
 #define FPGA_3D_GPIO_CONFIG_ADDR	0xB5
@@ -830,6 +908,7 @@ void __init msm8930_init_fb(void)
 #endif
 
 	platform_device_register(&mipi_dsi_toshiba_panel_device);
+	platform_device_register(&mipi_dsi2lvds_bridge_device);
 
 	msm_fb_register_device("mdp", &mdp_pdata);
 	msm_fb_register_device("mipi_dsi", &mipi_dsi_pdata);
