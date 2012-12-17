@@ -106,6 +106,10 @@
 #include <linux/input/synaptics_dsx.h>
 #endif
 
+#ifdef CONFIG_BATTERY_BQ27541
+#include <linux/i2c/bq27520.h>
+#endif
+
 static struct platform_device msm_fm_platform_init = {
 	.name = "iris_fm",
 	.id   = -1,
@@ -2055,6 +2059,19 @@ static struct i2c_board_info mxt_device_info_8930[] __initdata = {
 	},
 };
 
+#ifdef CONFIG_BATTERY_BQ27541
+static struct bq27520_platform_data bq27541_pdata = {
+	.name           = "fuel-gauge",
+};
+
+static struct i2c_board_info msm_bq27541_board_info[] __initdata= {
+        {
+                I2C_BOARD_INFO("bq27541", 0x55),
+                .platform_data = &bq27541_pdata,
+        },
+};
+#endif
+
 /* 	Synaptics Thin Driver	*/
 #if defined(CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_RMI4_I2C) || defined(CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_RMI4_I2C_MODULE)
 #define S7300_ADDR	0x20
@@ -2840,6 +2857,14 @@ static struct i2c_registry msm8960_i2c_devices[] __initdata = {
 		mxt_device_info_8930,
 		ARRAY_SIZE(mxt_device_info_8930),
 	},
+#ifdef CONFIG_BATTERY_BQ27541
+ 	{
+		I2C_SURF | I2C_FFA | I2C_FLUID,
+		MSM_8930_GSBI11_QUP_I2C_BUS_ID,
+        	msm_bq27541_board_info,
+		ARRAY_SIZE(msm_bq27541_board_info),
+	},
+#endif
 	{
 		I2C_SURF | I2C_FFA | I2C_FLUID,
 		MSM_8930_GSBI3_QUP_I2C_BUS_ID,
