@@ -478,10 +478,8 @@ static int bq27541_battery_probe(struct i2c_client *client,
 	struct bq27541_access_methods *bus;
 	int num;
 	int retval = 0;
-
 	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C))
 		return -ENODEV;
-
 	/* Get new ID for the new battery device */
 	retval = idr_pre_get(&battery_id, GFP_KERNEL);
 	if (retval == 0)
@@ -603,7 +601,6 @@ static struct i2c_driver bq27541_battery_driver = {
 static int __init bq27541_battery_init(void)
 {
 	int ret;
-
 	ret = i2c_add_driver(&bq27541_battery_driver);
 	if (ret)
 		printk(KERN_ERR "Unable to register BQ27541 driver\n");
