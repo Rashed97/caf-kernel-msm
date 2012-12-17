@@ -2190,11 +2190,6 @@ err_enable_irq:
 
 err_register_input:
 err_query_device:
-	if (platform_data->regulator_en) {
-		regulator_disable(rmi4_data->regulator);
-		regulator_put(rmi4_data->regulator);
-	}
-
 	list_for_each_entry(fhandler, &rmi->support_fn_list, link) {
 		if (fhandler->fn_number == SYNAPTICS_RMI4_F1A) {
 			synaptics_rmi4_f1a_kfree(fhandler);
