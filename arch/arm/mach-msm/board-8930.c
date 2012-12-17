@@ -2312,6 +2312,12 @@ static struct msm_i2c_platform_data msm8960_i2c_qup_gsbi10_pdata = {
 	.src_clk_rate = 24000000,
 };
 
+static struct msm_i2c_platform_data msm8960_i2c_qup_gsbi11_pdata = {
+	.clk_freq = 100000,
+	.src_clk_rate = 24000000,
+};
+
+
 static struct msm_i2c_platform_data msm8960_i2c_qup_gsbi12_pdata = {
 	.clk_freq = 100000,
 	.src_clk_rate = 24000000,
@@ -2475,6 +2481,7 @@ static struct platform_device *common_devices[] __initdata = {
 	&msm8960_device_qup_i2c_gsbi4,
 	&msm8960_device_qup_i2c_gsbi9,
 	&msm8960_device_qup_i2c_gsbi10,
+	&msm8960_device_qup_i2c_gsbi11,
 	&msm8960_device_qup_i2c_gsbi12,
 	&msm_slim_ctrl,
 	&msm_device_wcnss_wlan,
@@ -2597,6 +2604,9 @@ static void __init msm8930_i2c_init(void)
 
 	msm8960_device_qup_i2c_gsbi10.dev.platform_data =
 					&msm8960_i2c_qup_gsbi10_pdata;
+
+	msm8960_device_qup_i2c_gsbi11.dev.platform_data =
+					&msm8960_i2c_qup_gsbi11_pdata;
 
 	msm8960_device_qup_i2c_gsbi12.dev.platform_data =
 					&msm8960_i2c_qup_gsbi12_pdata;

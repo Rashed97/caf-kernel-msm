@@ -1816,6 +1816,34 @@ struct platform_device msm8960_device_qup_i2c_gsbi10 = {
 	.resource	= resources_qup_i2c_gsbi10,
 };
 
+static struct resource resources_qup_i2c_gsbi11[] = {
+	{
+		.name	= "gsbi_qup_i2c_addr",
+		.start	= MSM_GSBI11_PHYS,
+		.end	= MSM_GSBI11_PHYS + 4 - 1,
+		.flags	= IORESOURCE_MEM,
+	},
+	{
+		.name	= "qup_phys_addr",
+		.start	= MSM_GSBI11_QUP_PHYS,
+		.end	= MSM_GSBI11_QUP_PHYS + MSM_QUP_SIZE - 1,
+		.flags	= IORESOURCE_MEM,
+	},
+	{
+		.name	= "qup_err_intr",
+		.start	= GSBI11_QUP_IRQ,
+		.end	= GSBI11_QUP_IRQ,
+		.flags	= IORESOURCE_IRQ,
+	},
+};
+
+struct platform_device msm8960_device_qup_i2c_gsbi11 = {
+	.name		= "qup_i2c",
+	.id		= 11,
+	.num_resources	= ARRAY_SIZE(resources_qup_i2c_gsbi11),
+	.resource	= resources_qup_i2c_gsbi11,
+};
+
 static struct resource resources_qup_i2c_gsbi12[] = {
 	{
 		.name	= "gsbi_qup_i2c_addr",
