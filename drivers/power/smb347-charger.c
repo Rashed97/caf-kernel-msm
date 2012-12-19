@@ -46,6 +46,7 @@
 #define CFG_STAT_ACTIVE_HIGH			BIT(7)
 #define CFG_PIN					0x06
 #define CFG_PIN_EN_CTRL_MASK			0x60
+#define CFG_PIN_EN_CTRL_USB_HC			0x10
 #define CFG_PIN_EN_CTRL_ACTIVE_HIGH		0x40
 #define CFG_PIN_EN_CTRL_ACTIVE_LOW		0x60
 #define CFG_PIN_EN_APSD_IRQ			BIT(1)
@@ -205,7 +206,6 @@ static int hw_to_current(const unsigned int *tbl, size_t size, unsigned int val)
 static int current_to_hw(const unsigned int *tbl, size_t size, unsigned int val)
 {
 	size_t i;
-
 	for (i = 0; i < size; i++)
 		if (val < tbl[i])
 			break;
@@ -215,7 +215,6 @@ static int current_to_hw(const unsigned int *tbl, size_t size, unsigned int val)
 static int smb347_read(struct smb347_charger *smb, u8 reg)
 {
 	int ret;
-
 	ret = i2c_smbus_read_byte_data(smb->client, reg);
 	if (ret < 0)
 		dev_warn(&smb->client->dev, "failed to read reg 0x%x: %d\n",
@@ -226,7 +225,6 @@ static int smb347_read(struct smb347_charger *smb, u8 reg)
 static int smb347_write(struct smb347_charger *smb, u8 reg, u8 val)
 {
 	int ret;
-
 	ret = i2c_smbus_write_byte_data(smb->client, reg, val);
 	if (ret < 0)
 		dev_warn(&smb->client->dev, "failed to write reg 0x%x: %d\n",
@@ -247,11 +245,11 @@ static int smb347_update_status(struct smb347_charger *smb)
 	bool usb = false;
 	bool dc = false;
 	int ret;
+	const struct smb347_charger_platform_data *pdata = smb->pdata;
 
 	ret = smb347_read(smb, IRQSTAT_E);
 	if (ret < 0)
 		return ret;
-
 	/*
 	 * Dc and usb are set depending on whether they are enabled in
 	 * platform data _and_ whether corresponding undervoltage is set.
@@ -260,11 +258,35 @@ static int smb347_update_status(struct smb347_charger *smb)
 		dc = !(ret & IRQSTAT_E_DCIN_UV_STAT);
 	if (smb->pdata->use_usb)
 		usb = !(ret & IRQSTAT_E_USBIN_UV_STAT);
-
+	
 	mutex_lock(&smb->lock);
 	ret = smb->mains_online != dc || smb->usb_online != usb;
 	smb->mains_online = dc;
 	smb->usb_online = usb;
+
+	ret = smb347_read(smb, CFG_PIN);
+	ret &= ~CFG_PIN_EN_CTRL_MASK;
+	if(smb->mains_online){
+		ret &= ~CFG_PIN_EN_CTRL_USB_HC;
+	}
+	else if(smb->usb_online){
+		ret |= CFG_PIN_EN_CTRL_USB_HC;
+		ret |= CFG_PIN_EN_CTRL_ACTIVE_LOW;
+		pdata->enable_charging(1);
+	}
+	else{
+		ret |= CFG_PIN_EN_CTRL_USB_HC;
+		ret |= CFG_PIN_EN_CTRL_ACTIVE_LOW;
+		pdata->enable_charging(0);
+	}
+
+	/* Disable Automatic Power Source Detection (APSD) interrupt. */
+	ret &= ~CFG_PIN_EN_APSD_IRQ;
+
+	printk("***%s***CFG_PIN=0x%x\n", __FUNCTION__, CFG_PIN);
+
+	ret = smb347_write(smb, CFG_PIN, ret);
+
 	mutex_unlock(&smb->lock);
 
 	return ret;
@@ -354,24 +376,26 @@ static inline int smb347_charging_disable(struct smb347_charger *smb)
 static int smb347_update_online(struct smb347_charger *smb)
 {
 	int ret;
-
+	const struct smb347_charger_platform_data *pdata = smb->pdata;
 	/*
 	 * Depending on whether valid power source is connected or not, we
 	 * disable or enable the charging. We do it manually because it
 	 * depends on how the platform has configured the valid inputs.
 	 */
-	if (smb347_is_online(smb)) {
+	if (smb347_is_online(smb)) {	
+		pdata->enable_charging(1);
 		ret = smb347_charging_enable(smb);
 		if (ret < 0)
 			dev_err(&smb->client->dev,
 				"failed to enable charging\n");
+
 	} else {
+		pdata->enable_charging(0);
 		ret = smb347_charging_disable(smb);
 		if (ret < 0)
 			dev_err(&smb->client->dev,
 				"failed to disable charging\n");
 	}
-
 	return ret;
 }
 
@@ -412,7 +436,6 @@ static int smb347_set_charge_current(struct smb347_charger *smb)
 		ret &= ~CFG_CHARGE_CURRENT_TC_MASK;
 		ret |= val;
 	}
-
 	return smb347_write(smb, CFG_CHARGE_CURRENT, ret);
 }
 
@@ -443,7 +466,6 @@ static int smb347_set_current_limits(struct smb347_charger *smb)
 		ret &= ~CFG_CURRENT_LIMIT_USB_MASK;
 		ret |= val;
 	}
-
 	return smb347_write(smb, CFG_CURRENT_LIMIT, ret);
 }
 
@@ -756,7 +778,7 @@ static int smb347_hw_init(struct smb347_charger *smb)
 	ret = smb347_update_online(smb);
 
 fail:
-	smb347_set_writable(smb, false);
+	//smb347_set_writable(smb, false);
 	return ret;
 }
 
@@ -875,7 +897,7 @@ static int smb347_irq_set(struct smb347_charger *smb, bool enable)
 	}
 
 fail:
-	smb347_set_writable(smb, false);
+	//smb347_set_writable(smb, false);
 	return ret;
 }
 
@@ -927,12 +949,12 @@ static int smb347_irq_init(struct smb347_charger *smb)
 	if (ret < 0)
 		goto fail_readonly;
 
-	smb347_set_writable(smb, false);
+	//smb347_set_writable(smb, false);
 	smb->client->irq = irq;
 	return 0;
 
 fail_readonly:
-	smb347_set_writable(smb, false);
+	//smb347_set_writable(smb, false);
 fail_irq:
 	free_irq(irq, smb);
 fail_gpio:
@@ -1165,6 +1187,9 @@ static int smb347_probe(struct i2c_client *client,
 	int ret;
 
 	pdata = dev->platform_data;
+
+	pdata->enable_power(1);
+
 	if (!pdata)
 		return -EINVAL;
 

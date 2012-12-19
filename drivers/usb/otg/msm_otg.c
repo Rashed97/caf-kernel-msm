@@ -1077,6 +1077,7 @@ static int msm_otg_notify_chg_type(struct msm_otg *motg)
 	return 0;
 }
 
+#ifndef CONFIG_CHARGER_SMB347
 static int msm_otg_notify_power_supply(struct msm_otg *motg, unsigned mA)
 {
 
@@ -1103,6 +1104,7 @@ psy_not_supported:
 	dev_dbg(motg->phy.dev, "Power Supply doesn't support USB charger\n");
 	return -ENXIO;
 }
+#endif
 
 static void msm_otg_notify_charger(struct msm_otg *motg, unsigned mA)
 {
@@ -1132,8 +1134,11 @@ static void msm_otg_notify_charger(struct msm_otg *motg, unsigned mA)
 	 *  Use Power Supply API if supported, otherwise fallback
 	 *  to legacy pm8921 API.
 	 */
+
+#ifndef CONFIG_CHARGER_SMB347
 	if (msm_otg_notify_power_supply(motg, mA))
 		pm8921_charger_vbus_draw(mA);
+#endif
 
 	motg->cur_power = mA;
 }
