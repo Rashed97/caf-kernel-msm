@@ -2075,7 +2075,9 @@ static struct i2c_board_info msm_bq27541_board_info[] __initdata= {
 /* 	Synaptics Thin Driver	*/
 #if defined(CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_RMI4_I2C) || defined(CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_RMI4_I2C_MODULE)
 #define S7300_ADDR	0x20
-#define S7300_ATTN	11
+#define S7020_ADDR	0x70
+#define TP_ATTN		11
+#define TP_RESET	52
 
 #define TS_REGULATOR_L9       "vdd_ana"
 #define TS_REGULATOR_L11      "vdd_dig"
@@ -2107,17 +2109,17 @@ static int synaptics_ts_power_on(bool on)
 static int synaptics_platform_init(struct device *dev)
 {
     int retval;
-    retval = gpio_request(S7300_ATTN, "rmi4_attn");
+    retval = gpio_request(TP_ATTN, "rmi4_attn");
     if (retval) {
         pr_err("%s: Failed to get attn gpio %d. Code: %d.",
-                __func__, S7300_ATTN, retval);
+                __func__, TP_ATTN, retval);
         goto err_gpio_request_atten;
     }
 
-    retval = gpio_direction_input(S7300_ATTN);
+    retval = gpio_direction_input(TP_ATTN);
     if (retval) {
         pr_err("%s: Failed to setup attn gpio %d. Code: %d.",
-                __func__, S7300_ATTN, retval);
+                __func__, TP_ATTN, retval);
         goto err_gpio_direction_input_attn;
     }
 
@@ -2134,23 +2136,51 @@ static int synaptics_platform_init(struct device *dev)
                  __func__, retval);
          goto err_regulator_bukl_set_voltage;
      }
+    /* configure touchscreen reset gpio */
+    retval = gpio_request(TP_RESET, "touchscreen gpio reset");
+    if (retval) {
+        pr_err("%s: unable to request gpio %d\n",
+                __func__, TP_RESET);
+        goto tp_hardware_reset_tlmm_unconfig;
+    }
 
+    retval = gpio_direction_output(TP_RESET, 1);
+    if (retval < 0) {
+        pr_err("%s: unable to set the direction of gpio %d\n",
+                __func__, TP_RESET);
+        goto free_tp_hardware_reset;
+    }
     return 0;
+
+free_tp_hardware_reset:
+    gpio_free(TP_RESET);
+tp_hardware_reset_tlmm_unconfig:
+    gpio_tlmm_config(GPIO_CFG(TP_RESET, 0,
+                GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL,
+                GPIO_CFG_2MA), GPIO_CFG_DISABLE);
 err_regulator_bukl_set_voltage:
     regulator_bulk_free(ARRAY_SIZE(regs_ts), regs_ts);
 err_regulator_bulk_get:
 err_gpio_direction_input_attn:
-    gpio_free(S7300_ATTN);
+    gpio_free(TP_ATTN);
 err_gpio_request_atten:
     return retval;
 }
 
 static void synaptics_platform_exit(void)
 {
+    gpio_free(TP_RESET);
     regulator_bulk_free(ARRAY_SIZE(regs_ts), regs_ts);
-    gpio_free(S7300_ATTN);
+    gpio_free(TP_ATTN);
 }
 
+static void ts_hardware_reset(void)
+{
+    gpio_set_value(TP_RESET, 0);
+    usleep(10000);
+    gpio_set_value(TP_RESET, 1);
+    usleep(50000);
+}
 
 static unsigned char S7300_f1a_button_codes[] = {};
 
@@ -2162,17 +2192,22 @@ static struct synaptics_rmi_f1a_button_map S7300_f1a_button_map = {
 static struct synaptics_dsx_platform_data dsx_platformdata = {
 	.irq_type = IRQF_TRIGGER_FALLING,
     .regulator_en = true,
-	.gpio = S7300_ATTN,
+    .gpio = TP_ATTN,
     .platform_init = synaptics_platform_init,
     .platform_exit = synaptics_platform_exit,
     .power_on = synaptics_ts_power_on,
 	.f1a_button_map = &S7300_f1a_button_map,
+    .hardware_reset = ts_hardware_reset,
 };
 static struct i2c_board_info bus2_i2c_devices[] = {
 #if defined(CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_RMI4_I2C) || defined(CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_RMI4_I2C_MODULE)
      /* SYNAPTICS I2C */
      {
-         I2C_BOARD_INFO("synaptics_dsx_i2c", S7300_ADDR),
+         I2C_BOARD_INFO("synaptics_7300", S7300_ADDR),
+         .platform_data = &dsx_platformdata,
+     },
+     {
+         I2C_BOARD_INFO("synaptics_7020", S7020_ADDR),
          .platform_data = &dsx_platformdata,
      },
 #endif

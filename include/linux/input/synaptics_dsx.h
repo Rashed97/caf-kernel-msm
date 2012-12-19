@@ -51,6 +51,7 @@ struct synaptics_dsx_platform_data {
     void (*platform_exit)(void);
     int (*power_on)(bool on);
 	struct synaptics_rmi_f1a_button_map *f1a_button_map;
+	void (*hardware_reset)(void);
 };
 
 #endif

@@ -2070,6 +2070,8 @@ static int __devinit synaptics_rmi4_probe(struct i2c_client *client,
         }
     }
 
+        platform_data->hardware_reset();
+
 	init_waitqueue_head(&rmi4_data->wait);
 	mutex_init(&(rmi4_data->rmi4_io_ctrl_mutex));
 
@@ -2492,7 +2494,8 @@ static const struct dev_pm_ops synaptics_rmi4_dev_pm_ops = {
 #endif
 
 static const struct i2c_device_id synaptics_rmi4_id_table[] = {
-	{DRIVER_NAME, 0},
+	{"synaptics_7300", 0},
+	{"synaptics_7020", 1},
 	{},
 };
 MODULE_DEVICE_TABLE(i2c, synaptics_rmi4_id_table);
