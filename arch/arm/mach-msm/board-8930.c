@@ -110,6 +110,10 @@
 #include <linux/i2c/bq27520.h>
 #endif
 
+#ifdef CONFIG_CHARGER_SMB347
+#include <linux/power/smb347-charger.h>
+#endif
+
 static struct platform_device msm_fm_platform_init = {
 	.name = "iris_fm",
 	.id   = -1,
@@ -2059,6 +2063,88 @@ static struct i2c_board_info mxt_device_info_8930[] __initdata = {
 	},
 };
 
+#ifdef CONFIG_CHARGER_SMB347
+#define CHG_HC_EN				150
+#define CHG_INOK				55
+#define CFG_PIN_EN_CTRL_ACTIVE_LOW		0x60
+static struct regulator *regulator_lvs2;
+
+static void smb_init_power(bool on)
+{
+	printk("***%s***%d\n", __FUNCTION__, __LINE__);
+	if (on) {
+		printk("***%s***%d\n", __FUNCTION__, __LINE__);
+		regulator_lvs2= regulator_get(NULL, "8038_lvs2");
+		msleep(10);
+		regulator_set_voltage(regulator_lvs2, 1800000, 1800000);
+		msleep(10);
+		regulator_enable(regulator_lvs2);
+		msleep(10);
+		if (gpio_request(CHG_HC_EN, "CHG_HC_EN")) {
+			pr_err("%s.failed to get smb347_IRQ=%d.\n",
+			__FUNCTION__, CHG_HC_EN);
+		}
+		if (gpio_request(CHG_INOK, "CHG_INOK")) {
+			pr_err("%s.failed to get smb347_SYSOK=%d.\n",
+			__FUNCTION__, CHG_INOK);
+		}
+	}
+}
+
+static void smb_enable_charging(bool on)
+{
+	printk("***%s***%d\n", __FUNCTION__, __LINE__);
+
+	if (on) {
+		printk("***%s***%d\n", __FUNCTION__, __LINE__);
+		if (gpio_direction_output(CHG_HC_EN,1)){
+			pr_err("%s.failed to set smb347_cur_selector=%d.\n",
+			__FUNCTION__, CHG_HC_EN);
+		}
+	}
+	else{
+		printk("***%s***%d\n", __FUNCTION__, __LINE__);
+		if (gpio_direction_output(CHG_HC_EN,0)){
+			pr_err("%s.failed to set smb347_cur_selector=%d.\n",
+			__FUNCTION__, CHG_HC_EN);
+		}
+
+	}
+}
+
+static struct smb347_charger_platform_data smb347_data = {
+       .max_charge_current=2000000,
+       .max_charge_voltage=4200000,
+       .pre_charge_current=250000,
+       .termination_current=150000,
+       .pre_to_fast_voltage=3000000,
+       .mains_current_limit=2000000,
+       .usb_hc_current_limit=2000000,
+       .chip_temp_threshold=120,
+       .soft_cold_temp_limit=5,
+       .soft_hot_temp_limit=55,
+       .hard_cold_temp_limit=0,
+       .hard_hot_temp_limit=60,
+       .suspend_on_hard_temp_limit=1,
+       .soft_temp_limit_compensation=SMB347_SOFT_TEMP_COMPENSATE_DEFAULT,
+       .charge_current_compensation=250000,
+       .irq_gpio=6,
+       .enable_control=CFG_PIN_EN_CTRL_ACTIVE_LOW,
+       .use_mains=1,
+       .use_usb=1,
+       .use_usb_otg=0,
+       .enable_power=smb_init_power,
+       .enable_charging=smb_enable_charging,
+};
+
+static struct i2c_board_info smb347_dev[] __initdata= {
+        {
+                I2C_BOARD_INFO("smb347", 0x35),
+                .platform_data = &smb347_data,
+        },
+};
+#endif
+
 #ifdef CONFIG_BATTERY_BQ27541
 static struct bq27520_platform_data bq27541_pdata = {
 	.name           = "fuel-gauge",
@@ -2898,6 +2984,14 @@ static struct i2c_registry msm8960_i2c_devices[] __initdata = {
 		MSM_8930_GSBI11_QUP_I2C_BUS_ID,
         	msm_bq27541_board_info,
 		ARRAY_SIZE(msm_bq27541_board_info),
+	},
+#endif
+#ifdef CONFIG_CHARGER_SMB347
+ 	{
+		I2C_SURF | I2C_FFA | I2C_FLUID,
+		MSM_8930_GSBI11_QUP_I2C_BUS_ID,
+        	smb347_dev,
+		ARRAY_SIZE(smb347_dev),
 	},
 #endif
 	{

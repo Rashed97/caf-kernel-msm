@@ -111,7 +111,9 @@ struct smb347_charger_platform_data {
 	bool		use_usb;
 	bool		use_usb_otg;
 	int		irq_gpio;
-	enum smb347_chg_enable enable_control;
+	enum 		smb347_chg_enable enable_control;
+	void		(*enable_power)(bool on);
+	void		(*enable_charging)(bool on);
 };
 
 #endif /* SMB347_CHARGER_H */
