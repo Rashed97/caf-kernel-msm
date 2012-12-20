@@ -113,7 +113,7 @@ static struct msm_gpiomux_config msm8930_cam_common_configs[] = {
 	{
 		.gpio = 3,
 		.settings = {
-			[GPIOMUX_ACTIVE]    = &cam_settings[1],
+			[GPIOMUX_ACTIVE]    = &cam_settings[2],
 			[GPIOMUX_SUSPENDED] = &cam_settings[0],
 		},
 	},
@@ -202,6 +202,12 @@ static struct msm_camera_sensor_flash_src msm_flash_src = {
 	._fsrc.ext_driver_src.led_en = VFE_CAMIF_TIMER1_GPIO,
 	._fsrc.ext_driver_src.led_flash_en = VFE_CAMIF_TIMER2_GPIO,
 	._fsrc.ext_driver_src.flash_id = MAM_CAMERA_EXT_LED_FLASH_TPS61310,
+};
+static struct msm_camera_sensor_flash_src msm_flash_src_sc628a = {
+	.flash_sr_type = MSM_CAMERA_FLASH_SRC_EXT,
+	._fsrc.ext_driver_src.led_en = VFE_CAMIF_TIMER1_GPIO,
+	._fsrc.ext_driver_src.led_flash_en = VFE_CAMIF_TIMER2_GPIO,
+	._fsrc.ext_driver_src.flash_id = MAM_CAMERA_EXT_LED_FLASH_SC628A,
 };
 #endif
 
@@ -430,9 +436,16 @@ static struct msm_camera_device_platform_data msm_camera_csi_device_data[] = {
 };
 
 static struct camera_vreg_t msm_8930_cam_vreg[] = {
-	{"cam_vdig", REG_LDO, 1200000, 1200000, 105000},
-	{"cam_vio", REG_VS, 0, 0, 0},
-	{"cam_vana", REG_LDO, 2800000, 2850000, 85600},
+	{"cam_vdig", REG_LDO, 1200000, 1200000, 120000},
+	{"cam_vio", REG_VS, 0, 0,0},
+	{"cam_vana", REG_LDO, 2800000, 2850000,285000},
+	{"cam_vaf", REG_LDO, 2800000, 2850000, 300000},
+};
+
+static struct camera_vreg_t msm_8930_qrd_cam_vreg[] = {
+	{"cam_vdig", REG_LDO, 1800000, 1800000, 180000},
+	{"cam_vio", REG_VS, 0, 0,0},
+	{"cam_vana", REG_LDO, 2800000, 2850000,285000},
 	{"cam_vaf", REG_LDO, 2800000, 2850000, 300000},
 };
 
@@ -621,6 +634,44 @@ static struct msm_camera_sensor_info msm_camera_sensor_s5k3l1yx_data = {
 	.actuator_info    = &msm_act_main_cam_2_info,
 };
 
+//
+static struct msm_camera_sensor_flash_data flash_ov5647= {
+	.flash_type = MSM_CAMERA_FLASH_LED,
+	.flash_src = &msm_flash_src_sc628a
+};
+
+static struct msm_camera_csi_lane_params ov5647_csi_lane_params = {
+	.csi_lane_assign = 0xE4,
+	.csi_lane_mask = 0x3,
+};
+
+static struct msm_camera_sensor_platform_info sensor_board_info_ov5647 = {
+	.mount_angle  = 90,
+	.cam_vreg = msm_8930_qrd_cam_vreg,
+	.num_vreg = ARRAY_SIZE(msm_8930_qrd_cam_vreg),
+	.gpio_conf = &msm_8930_back_cam_gpio_conf,
+	.csi_lane_params = &ov5647_csi_lane_params,
+};
+
+/*static struct msm_actuator_info msm_act_main_cam_2_info = {
+	.board_info     = &msm_act_main_cam_i2c_info,
+	.cam_name   = MSM_ACTUATOR_MAIN_CAM_2,
+	.bus_id         = MSM_8930_GSBI4_QUP_I2C_BUS_ID,
+	.vcm_pwd        = 0,
+	.vcm_enable     = 0,
+};*/
+
+static struct msm_camera_sensor_info msm_camera_sensor_ov5647_data = {
+	.sensor_name          = "ov5647",
+	.pdata                = &msm_camera_csi_device_data[0],
+	.flash_data           = &flash_ov5647,
+	.sensor_platform_info = &sensor_board_info_ov5647,
+	.csi_if               = 1,
+	.camera_type          = BACK_CAMERA_2D,
+	.sensor_type          = BAYER_SENSOR,
+	.actuator_info    = &msm_act_main_cam_2_info,
+};
+//
 static struct platform_device msm_camera_server = {
 	.name = "msm_cam_server",
 	.id = 0,
@@ -674,8 +725,17 @@ struct i2c_board_info msm8930_camera_i2c_boardinfo[] = {
 	I2C_BOARD_INFO("s5k3l1yx", 0x20),
 	.platform_data = &msm_camera_sensor_s5k3l1yx_data,
 	},
+//
+	{
+	I2C_BOARD_INFO("ov5647", 0x36),
+	.platform_data = &msm_camera_sensor_ov5647_data,
+	},
+//
 	{
 	I2C_BOARD_INFO("tps61310", 0x66),
+	},
+	{
+	I2C_BOARD_INFO("sc628a", 0x6E),
 	},
 };
 
