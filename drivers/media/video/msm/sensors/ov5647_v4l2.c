@@ -159,7 +159,7 @@ static struct msm_camera_i2c_reg_conf ov5647_video_90fps_settings[] = {
 
 static struct msm_camera_i2c_reg_conf ov5647_zsl_settings[] = {
 	{0x3035, 0x21},
-	{0x3036, 0x4f},
+	{0x3036, 0x2f},
 	{0x3821, 0x06},
 	{0x3820, 0x00},
 	{0x3612, 0x0b},
@@ -407,6 +407,12 @@ static struct msm_sensor_output_reg_addr_t ov5647_reg_addr = {
 	.y_output = 0x380A,
 	.line_length_pclk = 0x380C,
 	.frame_length_lines = 0x380E,
+};
+static enum msm_camera_vreg_name_t ov5647_veg_seq[] = {
+	CAM_VIO,
+	CAM_VDIG,
+	CAM_VANA,
+	CAM_VAF,
 };
 
 static struct msm_sensor_id_info_t ov5647_id_info = {
@@ -684,9 +690,10 @@ int32_t ov5647_sensor_power_down(struct msm_sensor_ctrl_t *s_ctrl)
 		0x3018, rdata,
 		MSM_CAMERA_I2C_WORD_DATA);
 	msleep(20);
-	gpio_direction_output(info->sensor_pwd, 1);
+//	gpio_direction_output(info->sensor_pwd, 1);
 	usleep_range(5000, 5100);
 	msm_sensor_power_down(s_ctrl);
+
 	return 0;
 }
 
@@ -694,11 +701,11 @@ int32_t ov5647_sensor_power_up(struct msm_sensor_ctrl_t *s_ctrl)
 {
 	int32_t rc = 0;
 	struct msm_camera_sensor_info *info = NULL;
-
+	printk(KERN_ERR "%s\n",__func__);
 	info = s_ctrl->sensordata;
-	gpio_direction_output(info->sensor_pwd, 1);
-	gpio_direction_output(info->sensor_reset, 0);
-	usleep_range(10000, 11000);
+//	gpio_direction_output(54, 1);
+//	gpio_direction_output(107, 0);
+//	usleep_range(10000, 11000);
 	rc = msm_sensor_power_up(s_ctrl);
 	if (rc < 0) {
 		CDBG("%s: msm_sensor_power_up failed\n", __func__);
@@ -706,10 +713,17 @@ int32_t ov5647_sensor_power_up(struct msm_sensor_ctrl_t *s_ctrl)
 	}
 
 	/* turn on ldo and vreg */
-
-	gpio_direction_output(info->sensor_pwd, 0);
+	gpio_direction_output(54, 1);
 	msleep(20);
-	gpio_direction_output(info->sensor_reset, 1);
+
+	gpio_direction_output(54, 0);
+	msleep(20);
+
+	gpio_direction_output(107, 0);
+	msleep(25);
+
+
+	gpio_direction_output(107, 1);
 	msleep(25);
 
 	return rc;
@@ -780,13 +794,16 @@ static struct msm_sensor_fn_t ov5647_func_tbl = {
 	.sensor_set_fps = msm_sensor_set_fps,
 	.sensor_write_exp_gain = ov5647_write_prev_exp_gain,
 	.sensor_write_snapshot_exp_gain = ov5647_write_pict_exp_gain,
-	.sensor_csi_setting = ov5647_sensor_setting,
+//	.sensor_csi_setting = ov5647_sensor_setting,
+//	.sensor_setting = msm_sensor_setting,
+	.sensor_setting = ov5647_sensor_setting,
 	.sensor_set_sensor_mode = msm_sensor_set_sensor_mode,
 	.sensor_mode_init = msm_sensor_mode_init,
 	.sensor_get_output_info = msm_sensor_get_output_info,
 	.sensor_config = msm_sensor_config,
 	.sensor_power_up = ov5647_sensor_power_up,
-	.sensor_power_down = ov5647_sensor_power_down,
+	.sensor_power_down =msm_sensor_power_down,//ov5647_sensor_power_down,
+	.sensor_get_csi_params = msm_sensor_get_csi_params,
 };
 
 static struct msm_sensor_reg_t ov5647_regs = {
@@ -811,6 +828,8 @@ static struct msm_sensor_ctrl_t ov5647_s_ctrl = {
 	.msm_sensor_reg = &ov5647_regs,
 	.sensor_i2c_client = &ov5647_sensor_i2c_client,
 	.sensor_i2c_addr =  0x36 << 1 ,
+	.vreg_seq = ov5647_veg_seq,
+	.num_vreg_seq = ARRAY_SIZE(ov5647_veg_seq),
 	.sensor_output_reg_addr = &ov5647_reg_addr,
 	.sensor_id_info = &ov5647_id_info,
 	.sensor_exp_gain_info = &ov5647_exp_gain_info,
