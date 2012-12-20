@@ -82,7 +82,7 @@ static struct sitar_mbhc_config mbhc_cfg = {
 	.mclk_rate = SITAR_EXT_CLK_RATE,
 	.gpio = 0,
 	.gpio_irq = 0,
-	.gpio_level_insert = 1,
+	.gpio_level_insert = 0,
 };
 
 
