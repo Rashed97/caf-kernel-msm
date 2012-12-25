@@ -142,6 +142,8 @@ static bool dsi_power_on;
 #define DSI_LVDS_PWR_GPIO 7
 #define BACKLIGHT_PWR 8
 #define BACKLIGHT_EN 9
+#define PANEL_LR 22
+#define PANEL_UD 25
 #define DISP_3D_2D_MODE 1
 static int mipi_dsi_cdp_panel_power(int on)
 {
@@ -250,6 +252,20 @@ static int mipi_dsi_cdp_panel_power(int on)
 			return -1;
 		}
 		gpio_direction_output(BACKLIGHT_PWR, 0);
+		rc = gpio_request(PANEL_LR, "panel_L/R");
+		if (rc) {
+			pr_err("%s.failed to get panel_L/R=%d.\n",
+			       __func__, PANEL_LR);
+			return -1;
+		}
+		gpio_direction_output(PANEL_LR, 0);
+		rc = gpio_request(PANEL_UD, "panel_U/D");
+		if (rc) {
+			pr_err("%s.failed to get panel_U/D=%d.\n",
+			       __func__, PANEL_UD);
+			return -1;
+		}
+		gpio_direction_output(PANEL_UD, 0);
 		rc = gpio_request(BACKLIGHT_EN, "backlight_en");
 		if (rc) {
 			pr_err("%s.failed to get backlight_en=%d.\n",
@@ -304,6 +320,10 @@ static int mipi_dsi_cdp_panel_power(int on)
 		usleep(20);
 		gpio_direction_output(BACKLIGHT_EN, 1);
 		usleep(10000);
+		gpio_direction_output(PANEL_LR, 1);
+		usleep(20);
+		gpio_direction_output(PANEL_UD, 0);
+		usleep(20);
 		gpio_set_value(DSI_LVDS_PWR_GPIO, 1);
 		usleep(10);
 		gpio_set_value(DISP_RST_GPIO, 1);
@@ -318,6 +338,8 @@ static int mipi_dsi_cdp_panel_power(int on)
 	} else {
 		gpio_direction_output(BACKLIGHT_PWR, 0);
 		gpio_direction_output(BACKLIGHT_EN, 0);
+		gpio_direction_output(PANEL_LR, 0);
+		gpio_direction_output(PANEL_UD, 0);
 		gpio_set_value(DSI_LVDS_PWR_GPIO, 0);
 		gpio_set_value(DISP_RST_GPIO, 0);
 
@@ -546,7 +568,7 @@ static struct platform_device mipi_dsi_toshiba_panel_device = {
 	}
 };
 
-#define LPM_CHANNEL 0
+#define LPM_CHANNEL 1
 static int dsi2lvds_gpio[2] = {
 	LPM_CHANNEL,/* Backlight PWM-ID=0 for PMIC-GPIO#24 */
 	0x1F08 /* DSI2LVDS Bridge GPIO Output, mask=0x1f, out=0x08 */
