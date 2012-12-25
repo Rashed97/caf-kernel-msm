@@ -374,24 +374,30 @@ static int mipi_d2l_dsi_init_sequence(struct msm_fb_data_type *mfd)
 		 mfd->panel_info.mipi.frame_rate,
 		 mfd->panel_info.mipi.dst_format);
 
-	hbpr = 40;
-	hpw = 40;
-	vbpr = 8;
-	vpw = 8;
+//	hbpr = 40;
+//	hpw = 40;
+//	vbpr = 8;
+//	vpw = 8;
+	hbpr = 80;
+	hpw = 80;
+	vbpr = 10;
+	vpw = 10;
 
 	htime1 = (hbpr << 16) + hpw;
 	vtime1 = (vbpr << 16) + vpw;
 
-	hfpr = 80;
+//	hfpr = 80;
+	hfpr = 160;
 	hsize = mfd->panel_info.xres;
-	vfpr = 7;
+//	vfpr = 7;
+	vfpr = 15;
 	vsize = mfd->panel_info.yres;
 
 	htime2 = (hfpr << 16) + hsize;
 	vtime2 = (vfpr << 16) + vsize;
 
 	lvcfg = 0x0003; /* PCLK=DCLK/3, Dual Link, LVEN */
-	vpctrl = 0x00000020; /* Output RGB888 , Event-Mode , */
+	vpctrl = 0x00000120; /* Output RGB888 , Event-Mode , */
 	ppi_tx_rx_ta = 0x0008000B;
 
 	if (mfd->panel_info.xres == 1366) {
@@ -415,12 +421,19 @@ static int mipi_d2l_dsi_init_sequence(struct msm_fb_data_type *mfd)
 	mipi_d2l_write_reg(mfd, SYSRST, 0xFF);
 	msleep(30);
 
-	mipi_d2l_write_reg(mfd, PPI_TX_RX_TA, 0x0008000B); /* BTA */
-	mipi_d2l_write_reg(mfd, PPI_LPTXTIMECNT, 0x00000007);
-	mipi_d2l_write_reg(mfd, PPI_D0S_CLRSIPOCOUNT, 0x00000007);
-	mipi_d2l_write_reg(mfd, PPI_D1S_CLRSIPOCOUNT, 0x00000007);
-	mipi_d2l_write_reg(mfd, PPI_D2S_CLRSIPOCOUNT, 0x00000007);
-	mipi_d2l_write_reg(mfd, PPI_D3S_CLRSIPOCOUNT, 0x00000007);
+//	mipi_d2l_write_reg(mfd, PPI_TX_RX_TA, 0x0008000B); /* BTA */
+//	mipi_d2l_write_reg(mfd, PPI_LPTXTIMECNT, 0x00000007);
+//	mipi_d2l_write_reg(mfd, PPI_D0S_CLRSIPOCOUNT, 0x00000007);
+//	mipi_d2l_write_reg(mfd, PPI_D1S_CLRSIPOCOUNT, 0x00000007);
+//	mipi_d2l_write_reg(mfd, PPI_D2S_CLRSIPOCOUNT, 0x00000007);
+//	mipi_d2l_write_reg(mfd, PPI_D3S_CLRSIPOCOUNT, 0x00000007);
+	mipi_d2l_write_reg(mfd, PPI_TX_RX_TA, 0x00060008); /* BTA */
+	mipi_d2l_write_reg(mfd, PPI_LPTXTIMECNT, 0x00000005);
+	mipi_d2l_write_reg(mfd, PPI_D0S_CLRSIPOCOUNT, 0x00000004);
+	mipi_d2l_write_reg(mfd, PPI_D1S_CLRSIPOCOUNT, 0x00000004);
+	mipi_d2l_write_reg(mfd, PPI_D2S_CLRSIPOCOUNT, 0x00000004);
+	mipi_d2l_write_reg(mfd, PPI_D3S_CLRSIPOCOUNT, 0x00000004);
+
 	mipi_d2l_write_reg(mfd, PPI_LANEENABLE, lanes_enable);
 	mipi_d2l_write_reg(mfd, DSI_LANEENABLE, lanes_enable);
 	mipi_d2l_write_reg(mfd, PPI_STARTPPI, 0x00000001);
@@ -432,19 +445,32 @@ static int mipi_d2l_dsi_init_sequence(struct msm_fb_data_type *mfd)
 	mipi_d2l_write_reg(mfd, HTIM2, htime2);
 	mipi_d2l_write_reg(mfd, VTIM2, vtime2);
 	mipi_d2l_write_reg(mfd, VFUEN, 0x00000001);
-	mipi_d2l_write_reg(mfd, LVPHY0, 0x00448006);
+
+//	mipi_d2l_write_reg(mfd, LVPHY0, 0x00448006);
+//	udelay(200);
+//	mipi_d2l_write_reg(mfd, LVPHY0, 0x00048006);
+	mipi_d2l_write_reg(mfd, LVPHY0, 0x0044802D);
 	udelay(200);
-	mipi_d2l_write_reg(mfd, LVPHY0, 0x00048006);
+	mipi_d2l_write_reg(mfd, LVPHY0, 0x0004802D);
+
 	mipi_d2l_write_reg(mfd, SYSRST, 0x4);
 
 	if (vesa_rgb888) {
 		/* VESA format instead of JEIDA format for RGB888 */
-		mipi_d2l_write_reg(mfd, LVMX0003, 0x05040302);
-		mipi_d2l_write_reg(mfd, LVMX0407, 0x0A070706);
-		mipi_d2l_write_reg(mfd, LVMX0811, 0x0F0E0C0B);
-		mipi_d2l_write_reg(mfd, LVMX1215, 0x120F0E0D);
-		mipi_d2l_write_reg(mfd, LVMX1619, 0x14131716);
-		mipi_d2l_write_reg(mfd, LVMX2023, 0x1B171615);
+//		mipi_d2l_write_reg(mfd, LVMX0003, 0x05040302);
+//		mipi_d2l_write_reg(mfd, LVMX0407, 0x0A070706);
+//		mipi_d2l_write_reg(mfd, LVMX0811, 0x0F0E0C0B);
+//		mipi_d2l_write_reg(mfd, LVMX1215, 0x120F0E0D);
+//		mipi_d2l_write_reg(mfd, LVMX1619, 0x14131716);
+//		mipi_d2l_write_reg(mfd, LVMX2023, 0x1B171615);
+//		mipi_d2l_write_reg(mfd, LVMX2427, 0x061A1918);
+
+		mipi_d2l_write_reg(mfd, LVMX0003, 0x03020100);
+		mipi_d2l_write_reg(mfd, LVMX0407, 0x08050704);
+		mipi_d2l_write_reg(mfd, LVMX0811, 0x0F0E0A09);
+		mipi_d2l_write_reg(mfd, LVMX1215, 0x100D0C0B);
+		mipi_d2l_write_reg(mfd, LVMX1619, 0x12111716);
+		mipi_d2l_write_reg(mfd, LVMX2023, 0x1B151413);
 		mipi_d2l_write_reg(mfd, LVMX2427, 0x061A1918);
 	}
 
@@ -465,15 +491,21 @@ static int mipi_d2l_set_backlight_level(struct pwm_device *pwm, int level)
 {
 	int ret = 0;
 
+//	if (level != 0)
+//		level = 120;
+
 	pr_err("%s: level=%d.\n", __func__, level);
 
+	printk("<0> 111111111111111111 pwm:%d", (int)pwm);
 	if ((pwm == NULL) || (level > PWM_LEVEL) || (level < 0)) {
 		pr_err("%s.pwm=NULL.\n", __func__);
 		return -EINVAL;
 	}
 
+	printk("<0> 22222222222222222222 pwm:%d", (int)pwm);
 	ret = pwm_config(pwm, PWM_DUTY_LEVEL * level, PWM_PERIOD_USEC);
 	if (ret) {
+		printk("<0> 33333333333333333 pwm:%d", (int)pwm);
 		pr_err("%s: pwm_config() failed err=%d.\n", __func__, ret);
 		return ret;
 	}
@@ -499,7 +531,7 @@ static int mipi_d2l_set_backlight_level(struct pwm_device *pwm, int level)
 static int mipi_d2l_set_tn_clk(struct pwm_device *pwm, u32 usec)
 {
 	int ret = 0;
-
+	return 0;
 	pr_err("%s: usec=%d.\n", __func__, usec);
 
 	ret = pwm_config(pwm, usec/2 , usec);
@@ -550,10 +582,11 @@ static int mipi_d2l_lcd_on(struct platform_device *pdev)
 	chip_id = mipi_d2l_read_reg(mfd, IDREG);
 
 
-	if (chip_id != TC358764XBG_ID) {
-		pr_err("%s: invalid chip_id=0x%x", __func__, chip_id);
-		return -ENODEV;
-	}
+//	if (chip_id != TC358764XBG_ID) {
+//		pr_err("%s: invalid chip_id=0x%x", __func__, chip_id);
+//		return -ENODEV;
+//	}
+	printk("%s: 1111111111111111111111111 chip_id=0x%x", __func__, chip_id);
 
 	ret = mipi_d2l_dsi_init_sequence(mfd);
 	if (ret)
@@ -883,16 +916,16 @@ static int __devinit mipi_d2l_probe(struct platform_device *pdev)
 		pr_err("%s. led_pwm is invalid.\n", __func__);
 	}
 
-	tn_pwm = pwm_request(1, "3D_TN_clk");
-	if (tn_pwm == NULL || IS_ERR(tn_pwm)) {
-		pr_err("%s pwm_request() failed.id=%d.tn_pwm=%d.\n",
-		       __func__, 1, (int) tn_pwm);
-		tn_pwm = NULL;
-		return -EIO;
-	} else {
-		pr_err("%s.pwm_request() ok.pwm-id=%d.\n", __func__, 1);
-
-	}
+//	tn_pwm = pwm_request(1, "3D_TN_clk");
+//	if (tn_pwm == NULL || IS_ERR(tn_pwm)) {
+//		pr_err("%s pwm_request() failed.id=%d.tn_pwm=%d.\n",
+//		       __func__, 1, (int) tn_pwm);
+//		tn_pwm = NULL;
+//		return -EIO;
+//	} else {
+//		pr_err("%s.pwm_request() ok.pwm-id=%d.\n", __func__, 1);
+//
+//	}
 
 	pinfo = pdev->dev.platform_data;
 

@@ -89,8 +89,10 @@ static int __init mipi_chimei_wuxga_init(void)
 	pr_err("mipi-dsi chimei wuxga (1200x1920) driver ver 1.0.\n");
 
 	/* Portrait */
-	pinfo->xres = 1280;
-	pinfo->yres = 800;
+//	pinfo->xres = 1280;
+//	pinfo->yres = 800;
+	pinfo->xres = 1024;
+	pinfo->yres = 600;
 	pinfo->type =  MIPI_VIDEO_PANEL;
 	pinfo->pdest = DISPLAY_1; /* Primary Display */
 	pinfo->wait_cycle = 0;
@@ -104,20 +106,29 @@ static int __init mipi_chimei_wuxga_init(void)
 	 * LVDS-CLK = DSI-CLK/4 , 320 MHZ/4= 80 MHZ.
 	 */
 
-	pinfo->clk_rate = 570 * MHZ; /* bitclk Calculated */
+//	pinfo->clk_rate = 570 * MHZ; /* bitclk Calculated */
+	pinfo->clk_rate = 410 * MHZ; /* bitclk Calculated */
 
 	/*
 	 * this panel is operated by DE,
 	 * vsycn and hsync are ignored
 	 */
 
-	pinfo->lcdc.h_front_porch = 474;	/* thfp */
-	pinfo->lcdc.h_back_porch = 10;	/* thb */
-	pinfo->lcdc.h_pulse_width = 160;	/* thpw */
+//	pinfo->lcdc.h_back_porch = 10;	/* thb */
+//	pinfo->lcdc.h_front_porch = 474;	/* thfp */
+//	pinfo->lcdc.h_pulse_width = 160;	/* thpw */
+//
+//	pinfo->lcdc.v_front_porch = 7;	/* tvfp */
+//	pinfo->lcdc.v_back_porch = 8;	/* tvb */
+//	pinfo->lcdc.v_pulse_width = 8;	/* tvpw */
 
-	pinfo->lcdc.v_front_porch = 7;	/* tvfp */
-	pinfo->lcdc.v_back_porch = 8;	/* tvb */
-	pinfo->lcdc.v_pulse_width = 8;	/* tvpw */
+	pinfo->lcdc.h_back_porch = 160/3;	/* thb */
+	pinfo->lcdc.h_front_porch = 1970/3;	/* thfp */
+	pinfo->lcdc.h_pulse_width = 160/3;	/* thpw */
+
+	pinfo->lcdc.v_back_porch = 40/3;	/* tvb */
+	pinfo->lcdc.v_front_porch = 60/3;	/* tvfp */
+	pinfo->lcdc.v_pulse_width = 40/3;	/* tvpw */
 
 	pinfo->lcdc.border_clr = 0;		/* black */
 	pinfo->lcdc.underflow_clr = 0xff;	/* blue */
