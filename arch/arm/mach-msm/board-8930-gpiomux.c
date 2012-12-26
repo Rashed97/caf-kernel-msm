@@ -822,6 +822,23 @@ static struct msm_gpiomux_config msm8930_gyro_int_config[] __initdata = {
 	},
 };
 
+static struct gpiomux_setting acc_int_line = {
+	.func = GPIOMUX_FUNC_GPIO,
+	.drv = GPIOMUX_DRV_2MA,
+	.pull = GPIOMUX_PULL_NONE,
+};
+
+static struct msm_gpiomux_config msm8930_acc_int_config[] __initdata = {
+	{
+		.gpio = 46,     /* Acc Interrupt Line */
+		.settings = {
+			[GPIOMUX_SUSPENDED] = &acc_int_line,
+			[GPIOMUX_ACTIVE] = &acc_int_line,
+		},
+	},
+};
+
+
 static struct msm_gpiomux_config msm_sitar_config[] __initdata = {
 	{
 		.gpio   = 42,           /* SYS_RST_N */
@@ -904,6 +921,9 @@ int __init msm8930_init_gpiomux(void)
 	if (machine_is_msm8930_fluid() || machine_is_msm8930_mtp())
 		msm_gpiomux_install(msm8930_gyro_int_config,
 			ARRAY_SIZE(msm8930_gyro_int_config));
+
+	 msm_gpiomux_install(msm8930_acc_int_config,
+			ARRAY_SIZE(msm8930_acc_int_config));
 
 	msm_gpiomux_install(msm_sitar_config, ARRAY_SIZE(msm_sitar_config));
 
