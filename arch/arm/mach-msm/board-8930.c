@@ -2871,6 +2871,14 @@ static struct i2c_board_info __initdata mpu3050_i2c_boardinfo[] = {
 };
 #endif
 
+#ifdef CONFIG_BOSCH_BMA2X2
+static struct i2c_board_info __initdata bma2x2_i2c_boardinfo[] = {
+	{
+		I2C_BOARD_INFO("bma2x2", 0x18),
+	},
+};
+#endif
+
 #ifdef CONFIG_ISL9519_CHARGER
 static struct isl_platform_data isl_data __initdata = {
 	.valid_n_gpio		= 0,	/* Not required when notify-by-pmic */
@@ -2931,6 +2939,14 @@ static struct i2c_registry msm8960_i2c_devices[] __initdata = {
 		MSM_8930_GSBI12_QUP_I2C_BUS_ID,
 		mpu3050_i2c_boardinfo,
 		ARRAY_SIZE(mpu3050_i2c_boardinfo),
+	},
+#endif
+#ifdef CONFIG_BOSCH_BMA2X2
+	{
+		I2C_SURF | I2C_FFA | I2C_FLUID | I2C_LIQUID | I2C_RUMI,
+		MSM_8930_GSBI12_QUP_I2C_BUS_ID,
+		bma2x2_i2c_boardinfo,
+		ARRAY_SIZE(bma2x2_i2c_boardinfo),
 	},
 #endif
 	{
