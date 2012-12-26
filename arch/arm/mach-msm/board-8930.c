@@ -51,6 +51,10 @@
 #include <linux/input/lis3dh.h>
 #endif
 
+#ifdef CONFIG_BOSCH_BMA2X2
+#include <linux/input/bma2x2.h>
+#endif
+
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
 #include <asm/setup.h>
@@ -2872,9 +2876,28 @@ static struct i2c_board_info __initdata mpu3050_i2c_boardinfo[] = {
 #endif
 
 #ifdef CONFIG_BOSCH_BMA2X2
+
+#define BMA2X2_INT1_GPIO		46
+static struct bma2x2_platform_data bma2x2_pdata = {
+	.poll_interval = 200,
+	.min_interval = 10,
+	.g_range = 2,
+	.axis_map_x = 0,
+	.axis_map_y = 1,
+	.axis_map_z = 2,
+	.negate_x = 1,
+	.negate_y = 0,
+	.negate_z = 1,
+	.init = NULL,
+	.exit = NULL,
+	.gpio_int1 = BMA2X2_INT1_GPIO,
+	.gpio_int2 = -EINVAL,
+};
+
 static struct i2c_board_info __initdata bma2x2_i2c_boardinfo[] = {
 	{
 		I2C_BOARD_INFO("bma2x2", 0x18),
+		.platform_data = &bma2x2_pdata,
 	},
 };
 #endif
