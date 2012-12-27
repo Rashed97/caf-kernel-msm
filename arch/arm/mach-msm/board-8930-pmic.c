@@ -341,7 +341,7 @@ static struct pm8921_charger_platform_data pm8921_chg_pdata __devinitdata = {
 
 #define PM8038_WLED_MAX_CURRENT		25
 #define PM8XXX_LED_PWM_PERIOD		1000
-#define PM8XXX_LED_PWM_DUTY_MS		20
+#define PM8XXX_LED_PWM_DUTY_MS		10
 #define PM8038_RGB_LED_MAX_CURRENT	12
 
 static struct led_info pm8038_led_info[] = {
@@ -376,13 +376,11 @@ static struct wled_config_data wled_cfg = {
 	.num_strings = 1,
 };
 
-static int pm8038_led0_pwm_duty_pcts[56] = {
-		1, 4, 8, 12, 16, 20, 24, 28, 32, 36,
+static int pm8038_led0_pwm_duty_pcts[] = {
+		0,
+		0, 4, 8, 12, 16, 20, 24, 28, 32, 36,
 		40, 44, 46, 52, 56, 60, 64, 68, 72, 76,
-		80, 84, 88, 92, 96, 100, 100, 100, 98, 95,
-		92, 88, 84, 82, 78, 74, 70, 66, 62, 58,
-		58, 54, 50, 48, 42, 38, 34, 30, 26, 22,
-		14, 10, 6, 4, 1
+		80, 84, 88, 92, 96, 100,
 };
 
 /*
