@@ -297,6 +297,36 @@ static struct dsi_cmd_desc novatek_display_off_cmds[] = {
 		sizeof(enter_sleep), enter_sleep}
 };
 
+static char manufacture_id[2] = {0x04, 0x00}; /* DTYPE_DCS_READ */
+
+static struct dsi_cmd_desc novatek_manufacture_id_cmd = {
+	DTYPE_DCS_READ, 1, 0, 1, 5, sizeof(manufacture_id), manufacture_id};
+
+static u32 manu_id;
+
+static void mipi_novatek_manufacture_cb(u32 data)
+{
+	manu_id = data;
+	pr_info("%s: manufacture_id=%x\n", __func__, manu_id);
+}
+
+static uint32 mipi_novatek_manufacture_id(struct msm_fb_data_type *mfd)
+{
+	struct dcs_cmd_req cmdreq;
+
+	cmdreq.cmds = &novatek_manufacture_id_cmd;
+	cmdreq.cmds_cnt = 1;
+	cmdreq.flags = CMD_REQ_RX | CMD_REQ_COMMIT;
+	cmdreq.rlen = 3;
+	cmdreq.cb = mipi_novatek_manufacture_cb; /* call back */
+	mipi_dsi_cmdlist_put(&cmdreq);
+	/*
+	 * blocked here, untill call back called
+	 */
+
+	return manu_id;
+}
+
 static int fpga_addr;
 static int fpga_access_mode;
 static bool support_3d;
@@ -387,6 +417,11 @@ static int mipi_novatek_lcd_on(struct platform_device *pdev)
 		cmdreq.flags = CMD_REQ_COMMIT;
 		cmdreq.rlen = 0;
 		cmdreq.cb = NULL;
+		mipi_dsi_cmdlist_put(&cmdreq);
+
+		/* clean up ack_err_status */
+		mipi_dsi_cmd_bta_sw_trigger();
+		mipi_novatek_manufacture_id(mfd);
 	}
 	return 0;
 }
