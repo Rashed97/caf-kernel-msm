@@ -116,7 +116,11 @@
 
 #define PM8XXX_LED_OFFSET(id) ((id) - PM8XXX_ID_LED_0)
 
-#define PM8XXX_LED_PWM_FLAGS	(PM_PWM_LUT_LOOP | PM_PWM_LUT_RAMP_UP)
+#define PM8XXX_LED_PWM_FLAGS	(PM_PWM_LUT_LOOP | \
+				PM_PWM_LUT_RAMP_UP | \
+				PM_PWM_LUT_REVERSE | \
+				PM_PWM_LUT_PAUSE_HI_EN | \
+				PM_PWM_LUT_PAUSE_LO_EN)
 
 #define LED_MAP(_version, _kb, _led0, _led1, _led2, _flash_led0, _flash_led1, \
 	_wled, _rgb_led_red, _rgb_led_green, _rgb_led_blue)\
