@@ -350,14 +350,14 @@ static struct led_info pm8038_led_info[] = {
 		.default_trigger	= "bkl_trigger",
 	},
 	[1] = {
-		.name			= "led:rgb_red",
+		.name			= "red",
 		.default_trigger	= "battery-charging",
 	},
 	[2] = {
-		.name			= "led:rgb_green",
+		.name			= "green",
 	},
 	[3] = {
-		.name			= "led:rgb_blue",
+		.name			= "blue",
 	},
 };
 
