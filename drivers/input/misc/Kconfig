@@ -654,6 +654,13 @@ config BOSCH_BMA2X2
 	  If you say yes here you get support for Bosch Sensortec's
 	  acceleration sensors BMA255/BMA250E/BMA222E/BMA280.
 
+config ALPS_HSCDTD007A
+	tristate "HSCDTD007A magnetic field sensor support"
+	depends on I2C=y
+	help
+	  If you say yes here you get support for ALPS HSCDTD007A
+	  magnetic field sensor.
+
 config STM_LIS3DH
         tristate "STM LIS3DH acceleration sensor support"
         depends on I2C=y
