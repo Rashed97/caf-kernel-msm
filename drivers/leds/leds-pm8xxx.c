@@ -965,11 +965,14 @@ fail_id_check:
 static int __devexit pm8xxx_led_remove(struct platform_device *pdev)
 {
 	int i;
-	const struct led_platform_data *pdata =
+	const struct pm8xxx_led_platform_data *pdata =
 				pdev->dev.platform_data;
+	const struct led_platform_data *pcore_data;
 	struct pm8xxx_led_data *led = platform_get_drvdata(pdev);
 
-	for (i = 0; i < pdata->num_leds; i++) {
+	pcore_data = pdata->led_core;
+
+	for (i = 0; i < pcore_data->num_leds; i++) {
 		cancel_work_sync(&led[i].work);
 		mutex_destroy(&led[i].lock);
 		led_classdev_unregister(&led[i].cdev);
