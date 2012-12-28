@@ -55,6 +55,9 @@
 #include <linux/input/bma2x2.h>
 #endif
 
+#ifdef CONFIG_ALPS_HSCDTD007A
+#include <linux/input/hscdtd007a_i2c.h>
+#endif
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
 #include <asm/setup.h>
@@ -2903,9 +2906,27 @@ static struct i2c_board_info __initdata bma2x2_i2c_boardinfo[] = {
 #endif
 
 #ifdef CONFIG_ALPS_HSCDTD007A
+
+#define HSCDTD007A_INT_GPIO		70
+static struct hscd_platform_data hscd_pdata = {
+	.poll_interval = 200,
+	.min_interval = 10,
+	.g_range = 2,
+	.axis_map_x = 1,
+	.axis_map_y = 0,
+	.axis_map_z = 2,
+	.negate_x = 1,
+	.negate_y = 1,
+	.negate_z = 1,
+	.init = NULL,
+	.exit = NULL,
+	.gpio_int = HSCDTD007A_INT_GPIO,
+};
+
 static struct i2c_board_info __initdata hscd_i2c_boardinfo[] = {
 	{
 		I2C_BOARD_INFO("hscd_i2c", 0x0c),
+		.platform_data = &hscd_pdata,
 		.irq = -1,
 	},
 };

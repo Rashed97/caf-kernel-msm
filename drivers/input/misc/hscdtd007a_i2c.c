@@ -18,76 +18,76 @@
 #include <linux/module.h>
 #include <linux/moduleparam.h>
 #include <linux/i2c.h>
+#include <linux/err.h>
+#include <linux/irq.h>
+#include <linux/gpio.h>
 #include <linux/delay.h>
 #include <linux/slab.h>
-#ifdef CONFIG_HAS_EARLYSUSPEND
-#include <linux/earlysuspend.h>
-#endif
+#include <linux/mutex.h>
+#include <linux/interrupt.h>
+#include <linux/delay.h>
+#include <linux/input.h>
+#include <linux/input/hscdtd007a_i2c.h>
 
-/* If i2c_board_info structure of HSCDTD sensor already registered, 
-  please enable the "RESISTER_HSCDTD_I2C".  */
-//#define RESISTER_HSCDTD_I2C   1
+#define DELAY_MAX        2000
 
-#define I2C_RETRY_DELAY  5
-#define I2C_RETRIES      5
+#define EVENT_TYPE_MAGV_X           ABS_HAT0X
+#define EVENT_TYPE_MAGV_Y           ABS_HAT0Y
+#define EVENT_TYPE_MAGV_Z           ABS_BRAKE
+#define EVENT_TYPE_MAGV_STATUS      ABS_THROTTLE
 
-#define I2C_HSCD_ADDR    (0x0c)    /* 000 1100    */
-#define I2C_BUS_NUMBER   4
+#define ALPS_INPUT_FUZZ       0  /* input event threshold */
+#define ALPS_INPUT_FLAT       0
 
-#define HSCD_DRIVER_NAME "hscd_i2c"
+struct hscd_axis {
+    s16 x;
+    s16 y;
+    s16 z;
+};
 
-#define HSCD_CHIP_ID     0x1511
+struct hscd_data {
+    struct i2c_client *client;
+    struct hscd_platform_data *pdata;
+    struct input_dev *input_dev;
+    struct delayed_work work;
+    int irq;
+    struct mutex enable_mutex;
+    struct work_struct irq_work;
+    struct workqueue_struct *irq_work_queue;
+    struct hscd_axis values;
+    atomic_t enable;
+    atomic_t delay;
+};
 
-#define HSCD_STB         0x0C
-#define HSCD_INFO        0x0D
-#define HSCD_XOUT        0x10
-#define HSCD_YOUT        0x12
-#define HSCD_ZOUT        0x14
-#define HSCD_XOUT_H      0x11
-#define HSCD_XOUT_L      0x10
-#define HSCD_YOUT_H      0x13
-#define HSCD_YOUT_L      0x12
-#define HSCD_ZOUT_H      0x15
-#define HSCD_ZOUT_L      0x14
+struct output_rate_t {
+    u8 output_rate;         /* bandwith reg setting */
+    unsigned long delay_ms; /* bandwith in ms */
+};
 
-#define HSCD_STATUS      0x18
-#define HSCD_CTRL1       0x1b
-#define HSCD_CTRL2       0x1c
-#define HSCD_CTRL3       0x1d
-#define HSCD_CTRL4       0x1e
-
-#define STBB_OUTV_THR    3838
-
-
-static struct i2c_driver hscd_driver;
-static struct i2c_client *client_hscd = NULL;
-#ifdef CONFIG_HAS_EARLYSUSPEND
-static struct early_suspend hscd_early_suspend_handler;
-#endif
-
-static atomic_t flgEna;
-static atomic_t delay;
-static atomic_t flgSuspend;
-
-int hscd_get_hardware_data(int *xyz);
+static const struct output_rate_t output_rate_table[] = {
+    {ODR_100,   10}, /*   100Hz */
+    {ODR_20,    50}, /*    20Hz */
+    {ODR_10,   100}, /*    10Hz */
+    {ODR_0_5, 2000}, /*   0.5Hz */
+};
 
 /*-----------------------------------------------------------------------------------------------*/
 /* i2c read/erite function                                                                       */
 /*-----------------------------------------------------------------------------------------------*/
-static int hscd_i2c_readm(char *rxData, int length)
+static int hscd_i2c_readm(struct i2c_client *client, char *rxData, int length)
 {
     int err;
     int tries = 0;
 
     struct i2c_msg msgs[] = {
         {
-            .addr  = client_hscd->addr,
+            .addr  = client->addr,
             .flags = 0,
             .len   = 1,
             .buf   = rxData,
         },
         {
-            .addr  = client_hscd->addr,
+            .addr  = client->addr,
             .flags = I2C_M_RD,
             .len   = length,
             .buf   = rxData,
@@ -95,11 +95,11 @@ static int hscd_i2c_readm(char *rxData, int length)
     };
 
     do {
-        err = i2c_transfer(client_hscd->adapter, msgs, 2);
+        err = i2c_transfer(client->adapter, msgs, 2);
     } while ((err != 2) && (++tries < I2C_RETRIES));
 
     if (err != 2) {
-        dev_err(&client_hscd->adapter->dev, "read transfer error\n");
+        dev_err(&client->adapter->dev, "read transfer error\n");
         err = -EIO;
     } else {
         err = 0;
@@ -108,7 +108,7 @@ static int hscd_i2c_readm(char *rxData, int length)
     return err;
 }
 
-static int hscd_i2c_writem(char *txData, int length)
+static int hscd_i2c_writem(struct i2c_client *client, char *txData, int length)
 {
     int err;
     int tries = 0;
@@ -118,7 +118,7 @@ static int hscd_i2c_writem(char *txData, int length)
 
     struct i2c_msg msg[] = {
         {
-            .addr  = client_hscd->addr,
+            .addr  = client->addr,
             .flags = 0,
             .len   = length,
             .buf   = txData,
@@ -132,11 +132,11 @@ static int hscd_i2c_writem(char *txData, int length)
 #endif
 
     do {
-        err = i2c_transfer(client_hscd->adapter, msg, 1);
+        err = i2c_transfer(client->adapter, msg, 1);
     } while ((err != 1) && (++tries < I2C_RETRIES));
 
     if (err != 1) {
-        dev_err(&client_hscd->adapter->dev, "write transfer error\n");
+        dev_err(&client->adapter->dev, "write transfer error\n");
         err = -EIO;
     } else {
         err = 0;
@@ -148,148 +148,83 @@ static int hscd_i2c_writem(char *txData, int length)
 /*-----------------------------------------------------------------------------------------------*/
 /* hscdtd function                                                                               */
 /*-----------------------------------------------------------------------------------------------*/
-int hscd_self_test_A(void)
-{
-    u8 sx[2], cr1[1];
-
-    if (atomic_read(&flgSuspend) == 1) return -1;
-    /* Control resister1 backup  */
-    cr1[0] = HSCD_CTRL1;
-    if (hscd_i2c_readm(cr1, 1)) return 1;
-#ifdef ALPS_DEBUG
-    else printk("[HSCD] Control resister1 value, %02X\n", cr1[0]);
-#endif
-    mdelay(1);
-
-    /* Move active mode (force state)  */
-    sx[0] = HSCD_CTRL1;
-    sx[1] = 0x8A;
-    if (hscd_i2c_writem(sx, 2)) return 1;
-
-    /* Get inital value of self-test-A register  */
-    sx[0] = HSCD_STB;
-    hscd_i2c_readm(sx, 1);
-    mdelay(1);
-    sx[0] = HSCD_STB;
-    if (hscd_i2c_readm(sx, 1)) return 1;
-#ifdef ALPS_DEBUG
-    else printk("[HSCD] self test A register value, %02X\n", sx[0]);
-#endif
-    if (sx[0] != 0x55) {
-        printk("error: self-test-A, initial value is %02X\n", sx[0]);
-        return 2;
-    }
-
-    /* do self-test*/
-    sx[0] = HSCD_CTRL3;
-    sx[1] = 0x10;
-    if (hscd_i2c_writem(sx, 2)) return 1;
-    mdelay(3);
-
-    /* Get 1st value of self-test-A register  */
-    sx[0] = HSCD_STB;
-    if (hscd_i2c_readm(sx, 1)) return 1;
-#ifdef ALPS_DEBUG
-    else printk("[HSCD] self test register value, %02X\n", sx[0]);
-#endif
-    if (sx[0] != 0xAA) {
-        printk("error: self-test, 1st value is %02X\n", sx[0]);
-        return 3;
-    }
-    mdelay(3);
-
-    /* Get 2nd value of self-test register  */
-    sx[0] = HSCD_STB;
-    if (hscd_i2c_readm(sx, 1)) return 1;
-#ifdef ALPS_DEBUG
-    else printk("[HSCD] self test  register value, %02X\n", sx[0]);
-#endif
-    if (sx[0] != 0x55) {
-        printk("error: self-test, 2nd value is %02X\n", sx[0]);
-        return 4;
-    }
-
-    /* Resume */
-    sx[0] = HSCD_CTRL1;
-    sx[1] = cr1[0];
-    if (hscd_i2c_writem(sx, 2)) return 1;
-
-    return 0;
-}
-
-int hscd_self_test_B(void)
-{
-    int rc = 0, xyz[3];
-    u8 sx = 0;
-
-    if (atomic_read(&flgSuspend) == 1) return -1;
-
-    /* Measurement sensor value */
-    if (hscd_get_hardware_data(xyz)) return 1;
-
-    /* Check output value */
-    if ((xyz[0] <= -STBB_OUTV_THR) || (xyz[0] >= STBB_OUTV_THR)) sx |= 0x01;
-    if ((xyz[1] <= -STBB_OUTV_THR) || (xyz[1] >= STBB_OUTV_THR)) sx |= 0x02;
-    if ((xyz[2] <= -STBB_OUTV_THR) || (xyz[2] >= STBB_OUTV_THR)) sx |= 0x04;
-    if (sx) {
-        printk("error: self-test-B, 1st value is %02X\n", sx);
-        rc = (int)(sx | 0x10);
-    }
-
-    return rc;
-}
-
-int hscd_get_magnetic_field_data(int *xyz)
+int hscd_get_magnetic_data(struct i2c_client *client, struct hscd_axis *axis)
 {
     int err = -1;
-    int i;
+    s16 hw_d[3];
     u8 sx[6];
+    struct hscd_data *data = i2c_get_clientdata(client);
 
-    if (atomic_read(&flgSuspend) == 1) return err;
     sx[0] = HSCD_XOUT;
-    err = hscd_i2c_readm(sx, 6);
+    err = hscd_i2c_readm(client, sx, 6);
     if (err < 0) return err;
-    for (i=0; i<3; i++) {
-        xyz[i] = (int) ((short)((sx[2*i+1] << 8) | (sx[2*i])));
-    }
 
+    hw_d[0] = (short)((sx[1] << 8) | (sx[0]));
+    hw_d[1] = (short)((sx[3] << 8) | (sx[2]));
+    hw_d[2] = (short)((sx[5] << 8) | (sx[4]));
+
+    axis->x = ((data->pdata->negate_x) ? (-hw_d[data->pdata->axis_map_x])
+           : (hw_d[data->pdata->axis_map_x]));
+    axis->y = ((data->pdata->negate_y) ? (-hw_d[data->pdata->axis_map_y])
+           : (hw_d[data->pdata->axis_map_y]));
+    axis->z = ((data->pdata->negate_z) ? (-hw_d[data->pdata->axis_map_z])
+           : (hw_d[data->pdata->axis_map_z]));
 #ifdef ALPS_DEBUG
-    printk("Mag_I2C, x:%d, y:%d, z:%d\n",xyz[0], xyz[1], xyz[2]);
+    printk("Mag_I2C, x:%d, y:%d, z:%d\n", axis->x, axis->y, axis->z);
 #endif
 
     return err;
 }
 
-void hscd_activate(int flgatm, int active, int dtime)
+
+void hscd_set_delay(struct i2c_client *client, unsigned long delay_ms)
 {
     u8 buf[2];
+    u8 time_delay;
+    int i;
+    struct hscd_data *data = i2c_get_clientdata(client);
 
-    if (active != 0) active = 1;
-
-    if (active) {
-        buf[0] = HSCD_CTRL4;                       // 15 bit signed value
-        buf[1] = 0x90;
-        hscd_i2c_writem(buf, 2);
+    for (i = 0; i < ARRAY_SIZE(output_rate_table) ; i++) {
+        if (output_rate_table[i].delay_ms > delay_ms)
+            break;
     }
-    mdelay(1);
-    
-    if      (dtime <=  20) buf[1] = (3<<3);        // 100Hz- 10msec
-    else if (dtime <=  70) buf[1] = (2<<3);        //  20Hz- 50msec
-    else                   buf[1] = (1<<3);        //  10Hz-100msec
-    buf[0]  = HSCD_CTRL1;
-    buf[1] |= (active<<7);
-    hscd_i2c_writem(buf, 2);
-    mdelay(3);
 
-    if (flgatm) {
-        atomic_set(&flgEna, active);
-        atomic_set(&delay, dtime);
-    }
+    if (i > 0)
+        i--;
+
+    time_delay = output_rate_table[i].output_rate;
+
+    buf[0] = HSCD_CTRL1;
+    buf[1] = (atomic_read(&data->enable) << 7) | time_delay;
+    hscd_i2c_writem(client, buf, 2);
 }
 
-static int hscd_register_init(void)
+void hscd_set_enable(struct i2c_client *client, int enable)
 {
-    int v[3], ret = 0;
+    u8 buf[2];
+    u8 time_delay;
+
+    if (enable != 0)
+        enable = 1;
+
+    if (enable) {
+        buf[0] = HSCD_CTRL4;                       // 15 bit signed value
+        buf[1] = 0x90;
+        hscd_i2c_writem(client, buf, 2);
+    }
+
+    buf[0] = HSCD_CTRL1;
+    hscd_i2c_readm(client, buf, 1);
+    time_delay = buf[0] & OUTPUT_RATE_MASK;
+
+    buf[0] = HSCD_CTRL1;
+    buf[1] = (enable<<7) | time_delay;
+    hscd_i2c_writem(client, buf, 2);
+}
+
+static int hscd_register_init(struct hscd_data *data)
+{
+    int ret = 0;
     u8  buf[2];
     u16 chip_info;
 
@@ -298,7 +233,7 @@ static int hscd_register_init(void)
 #endif
 
     buf[0] = HSCD_INFO;
-    ret = hscd_i2c_readm(buf, 2);
+    ret = hscd_i2c_readm(data->client, buf, 2);
     if (ret < 0) {
         printk(KERN_INFO "[HSCD] read error.\n");
         return ret;
@@ -315,141 +250,128 @@ static int hscd_register_init(void)
 
     buf[0] = HSCD_CTRL3;
     buf[1] = 0x80;
-    hscd_i2c_writem(buf, 2);
+    hscd_i2c_writem(data->client, buf, 2);
     mdelay(5);
 
-    atomic_set(&delay, 100);
-    hscd_activate(0, 1, atomic_read(&delay));
-    hscd_get_magnetic_field_data(v);
-    printk("[HSCD] x:%d y:%d z:%d\n", v[0], v[1], v[2]);
-    hscd_activate(0, 0, atomic_read(&delay));
+    buf[0] = HSCD_CTRL2;
+    buf[1] = 0x0c;
+    hscd_i2c_writem(data->client, buf, 2);
+
+    atomic_set(&data->delay, 100);
 
     return 0;
 }
 
-int hscd_get_hardware_data(int *xyz)
+static void hscd_report_event(struct hscd_data *data)
 {
-    int ret = 0;
-#ifdef ALPS_DEBUG
-    printk("[HSCD] hscd_get_hardware_data\n");
-#endif
-    if (atomic_read(&flgSuspend) == 1) return -1;
-    hscd_activate(0, 1, 10);
-    mdelay(15);
-    ret = hscd_get_magnetic_field_data(xyz);
-    hscd_activate(0, atomic_read(&flgEna), atomic_read(&delay));
-    return ret;
+    input_report_abs(data->input_dev, EVENT_TYPE_MAGV_X, data->values.x);
+    input_report_abs(data->input_dev, EVENT_TYPE_MAGV_Y, data->values.y);
+    input_report_abs(data->input_dev, EVENT_TYPE_MAGV_Z, data->values.z);
+    input_sync(data->input_dev);
+}
+
+static void hscd_irq_work_func(struct work_struct *work)
+{
+    struct hscd_data *data = container_of(work, struct hscd_data, irq_work);
+    struct hscd_axis axis;
+
+    hscd_get_magnetic_data(data->client, &axis);
+    data->values = axis;
+
+    hscd_report_event(data);
+    enable_irq(data->irq);
+}
+
+static irqreturn_t hscd_irq_handler(int irq, void *dev)
+{
+    struct hscd_data *data = dev;
+    disable_irq_nosync(irq);
+    queue_work(data->irq_work_queue, &data->irq_work);
+
+    return IRQ_HANDLED;
 }
 
 /*-----------------------------------------------------------------------------------------------*/
 /* sysfs                                                                                         */
 /*-----------------------------------------------------------------------------------------------*/
-static ssize_t hscd_self_test_A_show(struct device *dev,
+static ssize_t hscd_delay_show(struct device *dev,
                     struct device_attribute *attr, char *buf)
 {
-    int ret = -1;
-#ifdef ALPS_DEBUG
-    printk("hscd_self_test_A_show\n");
-#endif
-    mutex_lock(&alps_lock);
-    ret = hscd_self_test_A();
-    mutex_unlock(&alps_lock);
-#ifdef ALPS_DEBUG
-    printk("[HSCD] Self test-A result : %d\n", ret);
-#endif
+    int interval_ms;
+    struct i2c_client *client = to_i2c_client(dev);
+    struct hscd_data *data = i2c_get_clientdata(client);
 
-    return sprintf(buf, "%d\n", ret);
-}
-
-static ssize_t hscd_self_test_B_show(struct device *dev,
-                    struct device_attribute *attr, char *buf)
-{
-    int ret = -1;
-#ifdef ALPS_DEBUG
-    printk("hscd_self_test_B_show\n");
-#endif
-    mutex_lock(&alps_lock);
-    ret = hscd_self_test_B();
-    mutex_unlock(&alps_lock);
-#ifdef ALPS_DEBUG
-    printk("[HSCD] Self test-B result : %d\n", ret);
-#endif
-
-    return sprintf(buf, "%d\n", ret);
-}
-
-static ssize_t hscd_get_hw_data_show(struct device *dev,
-                    struct device_attribute *attr, char *buf)
-{
-    int xyz[3], ret = -1;
-#ifdef ALPS_DEBUG
-    printk("hscd_get_hw_data\n");
-#endif
-    mutex_lock(&alps_lock);
-    ret = hscd_get_hardware_data(xyz);
-    mutex_unlock(&alps_lock);
-#ifdef ALPS_DEBUG
-    printk("[HSCD] get hw data, %d, %d, %d\n", xyz[0], xyz[1], xyz[2]);
-#endif
-
-    return sprintf(buf, "%d,%d,%d\n", xyz[0], xyz[1], xyz[2]);
-}
-
-static ssize_t hscd_get_delay(struct device *dev,
-                    struct device_attribute *attr, char *buf)
-{
-    int interval_ms = atomic_read(&delay);
+    interval_ms = atomic_read(&data->delay);
     return sprintf(buf, "%d\n", interval_ms);
 }
 
-static ssize_t hscd_set_delay(struct device *dev,
+static ssize_t hscd_delay_store(struct device *dev,
                     struct device_attribute *attr,
                     const char *buf, size_t size)
 {
     unsigned long interval_ms;
+    struct i2c_client *client = to_i2c_client(dev);
+    struct hscd_data *data = i2c_get_clientdata(client);
 
-    if (kstrtoul(buf, 10, &interval_ms) | !interval_ms)
+    if (strict_strtoul(buf, 10, &interval_ms) | !interval_ms)
         return -EINVAL;
 
-    atomic_set(&delay, interval_ms);
+    if (interval_ms > DELAY_MAX)
+        interval_ms = DELAY_MAX;
+
+    hscd_set_delay(data->client, interval_ms);
+    atomic_set(&data->delay, interval_ms);
 
     return size;
 }
 
-static ssize_t hscd_get_enable(struct device *dev,
+static ssize_t hscd_enable_show(struct device *dev,
                     struct device_attribute *attr, char *buf)
 {
-    int val = atomic_read(&flgEna);
+    int val;
+    struct i2c_client *client = to_i2c_client(dev);
+    struct hscd_data *data = i2c_get_clientdata(client);
+
+    val = atomic_read(&data->enable);
     return sprintf(buf, "%d\n", val);
 }
 
-static ssize_t hscd_set_enable(struct device *dev,
+static ssize_t hscd_enable_store(struct device *dev,
                     struct device_attribute *attr,
                     const char *buf, size_t size)
 {
     unsigned long val;
+    struct i2c_client *client = to_i2c_client(dev);
+    struct hscd_data *data = i2c_get_clientdata(client);
 
-    if (kstrtoul(buf, 10, &val))
+    if (strict_strtoul(buf, 10, &val))
         return -EINVAL;
 
-    if (val)
-        hscd_activate(1, 1, atomic_read(&delay));
-    else
-        hscd_activate(1, 0, atomic_read(&delay));
+    mutex_lock(&data->enable_mutex);
+    if (val) {
+        if (atomic_read(&data->enable) == 0) {
+            hscd_set_enable(data->client , val);
+            atomic_set(&data->enable, 1);
+            enable_irq(data->irq);
+        }
+    } else {
+        if (atomic_read(&data->enable) == 1) {
+            hscd_set_enable(data->client, 0);
+            atomic_set(&data->enable, 0);
+            disable_irq(data->irq);
+        }
+    }
+    mutex_unlock(&data->enable_mutex);
 
     return size;
 }
 
-static DEVICE_ATTR(self_test_A, 0444, hscd_self_test_A_show, NULL);
-static DEVICE_ATTR(self_test_B, 0444, hscd_self_test_B_show, NULL);
-static DEVICE_ATTR(get_hw_data, 0444, hscd_get_hw_data_show, NULL);
-static DEVICE_ATTR(delay, 0444, hscd_get_delay, hscd_set_delay);
-static DEVICE_ATTR(enable, 0444, hscd_get_enable, hscd_set_enable);
+static DEVICE_ATTR(poll_delay, 0444, hscd_delay_show, hscd_delay_store);
+static DEVICE_ATTR(enable, 0444, hscd_enable_show, hscd_enable_store);
 
 static struct attribute *hscd_attributes[] = {
-    &dev_attr_self_test_A.attr,
-    &dev_attr_self_test_B.attr,
-    &dev_attr_get_hw_data.attr,
+    &dev_attr_poll_delay.attr,
+    &dev_attr_enable.attr,
     NULL,
 };
 
@@ -462,150 +384,189 @@ static struct attribute_group hscd_attribute_group = {
 /*-----------------------------------------------------------------------------------------------*/
 static int hscd_probe(struct i2c_client *client, const struct i2c_device_id *id)
 {
-    printk("[HSCD] probe\n");
+    int ret = -1;
+    struct hscd_data *data;
+
+    printk("<0> [HSCD] probe\n");
     if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
         dev_err(&client->adapter->dev, "client not i2c capable\n");
         return -ENOMEM;
     }
-
-    client_hscd = kzalloc(sizeof(struct i2c_client), GFP_KERNEL);
-    if (!client_hscd) {
-        dev_err(&client->adapter->dev, "failed to allocate memory for module data\n");
+    data = kzalloc(sizeof(struct hscd_data), GFP_KERNEL);
+    if (!data) {
+        dev_err(&client->adapter->dev,
+                "failed to allocate memory for module data\n");
         return -ENOMEM;
     }
 
-    rc = hscd_register_init();
-    if (rc != 0) {
-        return -ENOTSUPP;
+    data->pdata = kmalloc(sizeof(*data->pdata), GFP_KERNEL);
+    if (data->pdata == NULL) {
+        ret = -ENOMEM;
+        dev_err(&client->dev,
+                "failed to allocate memory for pdata: %d\n", ret);
     }
-
-#ifdef ALPS_DEBUG
-    printk("%s Init end!!!!\n", __func__);
-#endif
+    memcpy(data->pdata, client->dev.platform_data, sizeof(*data->pdata));
 
 
-    alps_idev = input_allocate_polled_device();
-    if (!alps_idev) {
+    i2c_set_clientdata(client, data);
+    data->client = client;
+
+    /* initialize the input class */
+    data->input_dev = input_allocate_device();
+    if (!data->input_dev) {
         ret = -ENOMEM;
         goto out_device;
     }
-    printk(KERN_INFO "alps-init: input_allocate_polled_device\n");
+    printk(KERN_INFO "alps-init: input_allocate_device\n");
 
-    alps_idev->poll = alps_poll;
-    alps_idev->poll_interval = ALPS_POLL_INTERVAL;
+    data->input_dev->name = "compass";
+    data->input_dev->id.bustype = BUS_I2C;
 
-    /* initialize the input class */
-    idev = alps_idev->input;
-    idev->name = "alps_compass";
-    idev->id.bustype = BUS_HOST;
-    idev->dev.parent = &pdev->dev;
-    idev->evbit[0] = BIT_MASK(EV_ABS);
+    input_set_capability(data->input_dev, EV_ABS, EVENT_TYPE_MAGV_X);
+    input_set_capability(data->input_dev, EV_ABS, EVENT_TYPE_MAGV_Y);
+    input_set_capability(data->input_dev, EV_ABS, EVENT_TYPE_MAGV_Z);
+    input_set_abs_params(data->input_dev, EVENT_TYPE_MAGV_X, HSCDTD_RANGE_MIN,
+            HSCDTD_RANGE_MAX, ALPS_INPUT_FUZZ, ALPS_INPUT_FLAT);
+    input_set_abs_params(data->input_dev, EVENT_TYPE_MAGV_Y, HSCDTD_RANGE_MIN,
+            HSCDTD_RANGE_MAX, ALPS_INPUT_FUZZ, ALPS_INPUT_FLAT);
+    input_set_abs_params(data->input_dev, EVENT_TYPE_MAGV_Z, HSCDTD_RANGE_MIN,
+            HSCDTD_RANGE_MAX, ALPS_INPUT_FUZZ, ALPS_INPUT_FLAT);
 
-    input_set_abs_params(idev, EVENT_TYPE_MAGV_X,
-            -_HSCDTD_RANGE, _HSCDTD_RANGE, ALPS_INPUT_FUZZ, ALPS_INPUT_FLAT);
-    input_set_abs_params(idev, EVENT_TYPE_MAGV_Y,
-            -_HSCDTD_RANGE, _HSCDTD_RANGE, ALPS_INPUT_FUZZ, ALPS_INPUT_FLAT);
-    input_set_abs_params(idev, EVENT_TYPE_MAGV_Z,
-            -_HSCDTD_RANGE, _HSCDTD_RANGE, ALPS_INPUT_FUZZ, ALPS_INPUT_FLAT);
-    input_set_abs_params(idev, EVENT_TYPE_MAGV_STATUS,
-                0,    3, ALPS_INPUT_FUZZ, ALPS_INPUT_FLAT);
+    ret = input_register_device(data->input_dev);
+    if (ret) {
+        printk(KERN_INFO "alps-init: input_register_polled_device\n");
+        goto out_input_dev;
+    }
 
-    ret = input_register_polled_device(alps_idev);
-    if (ret)
-        goto out_alc_poll;
-    printk(KERN_INFO "alps-init: input_register_polled_device\n");
+    ret = sysfs_create_group(&data->input_dev->dev.kobj, &hscd_attribute_group);
+    if (ret) {
+        printk(KERN_INFO "alps-init: sysfs_create_group\n");
+    }
 
-    ret = sysfs_create_group(&alps_idev->input->dev.kobj, &hscd_attribute_group);
-    if (ret)
-        goto out_misc_ad;
-    printk(KERN_INFO "alps-init: sysfs_create_group\n");
+    if (data->pdata->gpio_int >= 0) {
+        data->irq = gpio_to_irq(data->pdata->gpio_int);
+        client->irq = data->irq;
+        ret = gpio_request(data->pdata->gpio_int,"hscd_int");
+        if (ret) {
+            pr_err("%s: unable to request interrupt gpio %d\n",
+                __func__, data->pdata->gpio_int);
+        }
 
-    atomic_set(&flgEna, 0);
-    atomic_set(&delay, 200);
-    atomic_set(&flgSuspend, 0);
+        ret = gpio_direction_input(data->pdata->gpio_int);
+        if (ret) {
+            pr_err("%s: unable to set direction for gpio %d\n",
+            __func__, data->pdata->gpio_int);
+            gpio_free(data->pdata->gpio_int);
+        }
 
-#ifdef CONFIG_HAS_EARLYSUSPEND
-    register_early_suspend(&hscd_early_suspend_handler);
+        INIT_WORK(&data->irq_work, hscd_irq_work_func);
+        data->irq_work_queue =
+            create_singlethread_workqueue("hscd_wq");
+        if (!data->irq_work_queue) {
+            ret = -ENOMEM;
+            dev_err(&client->dev,
+                    "cannot create work queue: %d\n", ret);
+        }
+        ret = request_irq(data->irq, hscd_irq_handler,
+                IRQF_TRIGGER_RISING, "hscd_irq", data);
+        if (ret < 0) {
+            dev_err(&client->dev, "request irq failed: %d\n", ret);
+        }
+        disable_irq_nosync(data->irq);
+    }
+
+    i2c_set_clientdata(client, data);
+    data->client = client;
+
+    input_set_drvdata(data->input_dev, data);
+
+    mutex_init(&data->enable_mutex);
+    atomic_set(&data->enable, 0);
+    atomic_set(&data->delay, 2000);
+
+    ret = hscd_register_init(data);
+    if (ret != 0) {
+        return -ENODEV;
+    }
+#ifdef ALPS_DEBUG
+    printk("%s Init end!!!!\n", __func__);
 #endif
 
     dev_info(&client->adapter->dev, "detected HSCDTD007/008 geomagnetic field sensor\n");
 
     return 0;
+
+out_input_dev:
+    input_free_device(data->input_dev);
+    printk(KERN_INFO "alps-init: input_free_device\n");
+out_device:
+    return ret;
 }
 
 static int __devexit hscd_remove(struct i2c_client *client)
 {
-    printk("[HSCD] remove\n");
-    hscd_activate(0, 0, atomic_read(&delay));
-#ifdef CONFIG_HAS_EARLYSUSPEND
-    unregister_early_suspend(&hscd_early_suspend_handler);
-#endif
-    kfree(client_hscd);
+    struct hscd_data *data = i2c_get_clientdata(client);
+
+    hscd_set_enable(data->client, 0);
+    kfree(data);
     return 0;
 }
 
-static int hscd_suspend(struct i2c_client *client, pm_message_t mesg)
+static int hscd_suspend(struct device *dev)
 {
+    struct i2c_client *client = to_i2c_client(dev);
+    struct hscd_data *data = i2c_get_clientdata(client);
 #ifdef ALPS_DEBUG
     printk("[HSCD] suspend\n");
 #endif
-    atomic_set(&flgSuspend, 1);
-    hscd_activate(0, 0, atomic_read(&delay));
+    mutex_lock(&data->enable_mutex);
+    if (atomic_read(&data->enable)) {
+        cancel_work_sync(&data->irq_work);
+        disable_irq(data->irq);
+        hscd_set_enable(data->client, 0);
+    }
+    mutex_unlock(&data->enable_mutex);
+
     return 0;
 }
 
-static int hscd_resume(struct i2c_client *client)
+static int hscd_resume(struct device *dev)
 {
+    struct i2c_client *client = to_i2c_client(dev);
+    struct hscd_data *data = i2c_get_clientdata(client);
 #ifdef ALPS_DEBUG
     printk("[HSCD] resume\n");
 #endif
-    atomic_set(&flgSuspend, 0);
-    hscd_activate(0, atomic_read(&flgEna), atomic_read(&delay));
+    mutex_lock(&data->enable_mutex);
+    if (atomic_read(&data->enable)) {
+        hscd_set_enable(data->client, 1);
+        enable_irq(data->irq);
+    }
+    mutex_unlock(&data->enable_mutex);
+
     return 0;
 }
 
-#ifdef CONFIG_HAS_EARLYSUSPEND
-static void hscd_early_suspend(struct early_suspend *handler)
-{
-#ifdef ALPS_DEBUG
-    printk("[HSCD] early_suspend\n");
-#endif
-    hscd_suspend(client_hscd, PMSG_SUSPEND);
-}
-
-static void hscd_early_resume(struct early_suspend *handler)
-{
-#ifdef ALPS_DEBUG
-    printk("[HSCD] early_resume\n");
-#endif
-    hscd_resume(client_hscd);
-}
-#endif
-
-static const struct i2c_device_id ALPS_id[] = {
+static const struct i2c_device_id hscd_id[] = {
     { HSCD_DRIVER_NAME, 0 },
     { }
+};
+
+static const struct dev_pm_ops hscd_pm_ops = {
+    .suspend  = hscd_suspend,
+    .resume   = hscd_resume,
 };
 
 static struct i2c_driver hscd_driver = {
     .probe    = hscd_probe,
     .remove   = hscd_remove,
-    .id_table = ALPS_id,
     .driver   = {
+        .owner = THIS_MODULE,
         .name = HSCD_DRIVER_NAME,
+        .pm = &hscd_pm_ops,
     },
-#ifndef CONFIG_HAS_EARLYSUSPEND
-    .suspend  = hscd_suspend,
-    .resume   = hscd_resume,
-#endif
+    .id_table = hscd_id,
 };
-
-#ifdef CONFIG_HAS_EARLYSUSPEND
-static struct early_suspend hscd_early_suspend_handler = {
-    .suspend = hscd_early_suspend,
-    .resume  = hscd_early_resume,
-};
-#endif
 
 static int __init hscd_init(void)
 {
