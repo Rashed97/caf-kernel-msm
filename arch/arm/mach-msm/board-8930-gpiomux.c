@@ -822,6 +822,22 @@ static struct msm_gpiomux_config msm8930_gyro_int_config[] __initdata = {
 	},
 };
 
+static struct gpiomux_setting compass_int_line = {
+	.func = GPIOMUX_FUNC_GPIO,
+	.drv = GPIOMUX_DRV_2MA,
+	.pull = GPIOMUX_PULL_NONE,
+};
+
+static struct msm_gpiomux_config msm8930_compass_int_config[] __initdata = {
+	{
+		.gpio = 70,     /* compass Interrupt Line */
+		.settings = {
+			[GPIOMUX_SUSPENDED] = &compass_int_line,
+			[GPIOMUX_ACTIVE] = &compass_int_line,
+		},
+	},
+};
+
 static struct gpiomux_setting acc_int_line = {
 	.func = GPIOMUX_FUNC_GPIO,
 	.drv = GPIOMUX_DRV_2MA,
@@ -922,7 +938,10 @@ int __init msm8930_init_gpiomux(void)
 		msm_gpiomux_install(msm8930_gyro_int_config,
 			ARRAY_SIZE(msm8930_gyro_int_config));
 
-	 msm_gpiomux_install(msm8930_acc_int_config,
+	msm_gpiomux_install(msm8930_compass_int_config,
+		ARRAY_SIZE(msm8930_compass_int_config));
+
+	msm_gpiomux_install(msm8930_acc_int_config,
 			ARRAY_SIZE(msm8930_acc_int_config));
 
 	msm_gpiomux_install(msm_sitar_config, ARRAY_SIZE(msm_sitar_config));
