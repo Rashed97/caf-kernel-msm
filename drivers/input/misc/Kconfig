@@ -661,6 +661,13 @@ config ALPS_HSCDTD007A
 	  If you say yes here you get support for ALPS HSCDTD007A
 	  magnetic field sensor.
 
+config AL3010
+	tristate "Lite-On al3010 ambient light sensor support"
+	depends on I2C=y
+	help
+	  If you say yes here you get support for Lite-On's
+	  ambient light sensors al3010.
+
 config STM_LIS3DH
         tristate "STM LIS3DH acceleration sensor support"
         depends on I2C=y
