@@ -425,10 +425,11 @@ static int pm8xxx_led_pwm_work(struct pm8xxx_led_singular_data *led)
 	if (led->pwm_duty_cycles == NULL || led->led_data->blink == 0) {
 		duty_us = (led->pwm_period_us * led->cdev.brightness) /
 								LED_FULL;
-		rc = pwm_config(led->pwm_dev, duty_us, led->pwm_period_us);
 		if (led->cdev.brightness) {
 			rc = pwm_enable(led->pwm_dev);
+			rc = pwm_config(led->pwm_dev, duty_us, led->pwm_period_us);
 		} else {
+			rc = pwm_config(led->pwm_dev, 0, led->pwm_period_us);
 			pwm_disable(led->pwm_dev);
 		}
 	} else {
