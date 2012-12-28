@@ -2932,6 +2932,14 @@ static struct i2c_board_info __initdata hscd_i2c_boardinfo[] = {
 };
 #endif
 
+#ifdef CONFIG_AL3010
+static struct i2c_board_info __initdata al3010_i2c_boardinfo[] = {
+	{
+		I2C_BOARD_INFO("dyna", 0x1C),
+	},
+};
+#endif
+
 #ifdef CONFIG_ISL9519_CHARGER
 static struct isl_platform_data isl_data __initdata = {
 	.valid_n_gpio		= 0,	/* Not required when notify-by-pmic */
@@ -3010,6 +3018,15 @@ static struct i2c_registry msm8960_i2c_devices[] __initdata = {
 		ARRAY_SIZE(hscd_i2c_boardinfo),
 	},
 #endif
+#ifdef CONFIG_AL3010
+	{
+		I2C_SURF | I2C_FFA | I2C_FLUID | I2C_LIQUID | I2C_RUMI,
+		MSM_8930_GSBI12_QUP_I2C_BUS_ID,
+		al3010_i2c_boardinfo,
+		ARRAY_SIZE(al3010_i2c_boardinfo),
+	},
+#endif
+al3010_i2c_boardinfo
 	{
 		I2C_SURF | I2C_FFA | I2C_FLUID,
 		MSM_8930_GSBI9_QUP_I2C_BUS_ID,
