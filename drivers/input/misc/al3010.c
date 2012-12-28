@@ -42,9 +42,13 @@
 #include <linux/interrupt.h>
 #include <linux/input.h>
 #include <linux/string.h>
+#include <linux/input/al3010.h>
+#include <linux/gpio.h>
+#include <linux/delay.h>
 
-//#define AL3010_DRV_NAME	"al3010"
-#define AL3010_DRV_NAME		"dyna"
+
+#define AL3010_DRV_NAME	"al3010"
+//#define AL3010_DRV_NAME		"dyna"
 #define DRIVER_VERSION		"1.9"
 
 #define AL3010_NUM_CACHABLE_REGS	9
@@ -86,11 +90,16 @@ static u8 al3010_reg[AL3010_NUM_CACHABLE_REGS] =
 
 static int al3010_range[4] = {77806,19452,4863,1216};
 
-#define LSC_DBG
+//#define LSC_DBG
 #ifdef LSC_DBG
 #define LDBG(s,args...)	{printk("LDBG: func [%s], line [%d], ",__func__,__LINE__); printk(s,## args);}
 #else
 #define LDBG(s,args...) {}
+#endif
+
+//#define AL3010_INTERRUPT_MODE
+#ifndef AL3010_INTERRUPT_MODE
+#define AL3010_MAX_DELAY                200
 #endif
 
 struct al3010_data {
@@ -98,24 +107,31 @@ struct al3010_data {
 	struct mutex lock;
 	u8 reg_cache[AL3010_NUM_CACHABLE_REGS];
 	u8 power_state_before_suspend;
-	int irq;
 	struct input_dev *input;
+#ifdef AL3010_INTERRUPT_MODE
+	int irq;
+#else
+	atomic_t delay;
+	atomic_t enable;
+	struct mutex enable_mutex;
+	struct delayed_work work;
+#endif
 };
 
 int cali = 100;
 
-#define ADD_TO_IDX(addr,idx)	{														\
-									int i;												\
-									for(i = 0; i < AL3010_NUM_CACHABLE_REGS; i++)		\
-									{													\
-										if (addr == al3010_reg[i])						\
-										{												\
-											idx = i;									\
-											break;										\
-										}												\
-									}													\
-								}
 
+#define ADD_TO_IDX(addr,idx)	{												\
+					int i;											\
+					for(i = 0; i < AL3010_NUM_CACHABLE_REGS; i++)						\
+					{											\
+						if (addr == al3010_reg[i])							\
+						{										\
+							idx = i;								\
+							break;									\
+						}										\
+					}											\
+				}
 /*
  * register access helpers
  */
@@ -164,15 +180,15 @@ static int __al3010_write_reg(struct i2c_client *client,
 static int al3010_get_range(struct i2c_client *client)
 {
 	int tmp;
-	tmp = __al3010_read_reg(client, AL3010_ALS_COMMAND,
-											AL3010_RAN_MASK, AL3010_RAN_SHIFT);;
+	tmp = __al3010_read_reg(client, AL3010_ALS_COMMAND, 
+		AL3010_RAN_MASK, AL3010_RAN_SHIFT);
 	return al3010_range[tmp];
 }
 
 static int al3010_set_range(struct i2c_client *client, int range)
 {
 	return __al3010_write_reg(client, AL3010_ALS_COMMAND, 
-											AL3010_RAN_MASK, AL3010_RAN_SHIFT, range);
+		AL3010_RAN_MASK, AL3010_RAN_SHIFT, range);
 }
 
 
@@ -293,37 +309,38 @@ static int al3010_get_adc_value(struct i2c_client *client)
  */
 static int al3010_input_init(struct al3010_data *data)
 {
-    struct input_dev *dev;
-    int err;
+	struct input_dev *dev;
+	int err;
 
-    dev = input_allocate_device();
-    if (!dev) {
-        return -ENOMEM;
-    }
-    dev->name = "LSC_al3010";
-    dev->id.bustype = BUS_I2C;
-
-    input_set_capability(dev, EV_ABS, ABS_MISC);
-    input_set_capability(dev, EV_ABS, ABS_RUDDER);
-    input_set_drvdata(dev, data);
-
-    err = input_register_device(dev);
-    if (err < 0) {
-        input_free_device(dev);
-		LDBG("input device register error! ret = [%d]\n", err)
-        return err;
-    }
-    data->input = dev;
+	dev = input_allocate_device();
+	if (!dev) {
+		return -ENOMEM;
+	}
+	dev->name = "light";
+	dev->id.bustype = BUS_I2C;
 	
-    return 0;
+	input_set_capability(dev, EV_ABS, ABS_MISC);
+	//input_set_capability(dev, EV_ABS, ABS_RUDDER);
+	input_set_abs_params(dev, ABS_MISC, 0, 1, 0, 0);
+	input_set_drvdata(dev, data);
+
+	err = input_register_device(dev);
+	if (err < 0) {
+		input_free_device(dev);
+		LDBG("input device register error! ret = [%d]\n", err)
+			return err;
+	}
+	data->input = dev;
+
+	return 0;
 }
 
 static void al3010_input_fini(struct al3010_data *data)
 {
-    struct input_dev *dev = data->input;
+    	struct input_dev *dev = data->input;
 
-    input_unregister_device(dev);
-    input_free_device(dev);
+    	input_unregister_device(dev);
+	input_free_device(dev);
 }
 
 /* range */
@@ -375,19 +392,46 @@ static ssize_t al3010_store_mode(struct device *dev,
 	struct input_dev *input = to_input_dev(dev);
 	struct al3010_data *data = input_get_drvdata(input);
 	unsigned long val;
-	int ret;
+	int ret = 0;
 
 	if ((strict_strtoul(buf, 10, &val) < 0) || (val > 5))
 		return -EINVAL;
-
+#ifdef AL3010_INTERRUPT_MODE
 	ret = al3010_set_mode(data->client, val);
+	/*	
+	if (val)
+            enable_irq(data->client->irq);
+	else
+	    disable_irq(data->client->irq);
+	*/	
+#else
+	mutex_lock(&data->enable_mutex);
+	if (val) {
+		if (atomic_read(&data->enable) == 0) {
+			ret = al3010_set_mode(data->client, val);
+			schedule_delayed_work(&data->work, msecs_to_jiffies(atomic_read(&data->delay)));
+			atomic_set(&data->enable, 1);
+
+			LDBG("al3010 start delay\n");
+		}
+	} else {
+		if (atomic_read(&data->enable) == 1) {
+			ret = al3010_set_mode(data->client, val);
+			cancel_delayed_work_sync(&data->work);	
+			atomic_set(&data->enable, 0);
+
+			LDBG("al3010 end delay\n");
+		}
+	}
+	mutex_unlock(&data->enable_mutex);
+#endif
 	if (ret < 0)
 		return ret;
 
 	return count;
 }
 
-static DEVICE_ATTR(mode, S_IWUSR | S_IRUGO,
+static DEVICE_ATTR(enable, S_IWUSR | S_IRUGO,
 		   al3010_show_mode, al3010_store_mode);
 
 
@@ -601,7 +645,7 @@ static DEVICE_ATTR(em, S_IWUSR |S_IRUGO,
 
 static struct attribute *al3010_attributes[] = {
 	&dev_attr_range.attr,
-	&dev_attr_mode.attr,
+	&dev_attr_enable.attr,
 	&dev_attr_power_state.attr,
 	&dev_attr_lux.attr,
 	&dev_attr_althres.attr,
@@ -635,21 +679,47 @@ static int al3010_init_client(struct i2c_client *client)
 	/* set defaults */
 	al3010_set_range(client, 0);
 	al3010_set_mode(client, 0);
+	al3010_set_althres(client, 0);
+	al3010_set_ahthres(client, 0);
 	al3010_set_power_state(client, 0);
 
 	return 0;
 }
 
+static void al3010_updata_value(struct al3010_data *data)
+{
+	int value;
+	struct input_dev *input_data;
+
+	value = al3010_get_adc_value(data->client);
+
+	LDBG("al3010 lux value: %d\n", value);
+
+	input_data = data->input;
+	input_report_abs(input_data, ABS_MISC, value);
+	input_sync(input_data);
+}
+
+#ifdef AL3010_INTERRUPT_MODE
 static irqreturn_t al3010_irq(int irq, void *data_)
 {
 	struct al3010_data *data = data_;
-    int Aval;
-	
-	Aval = al3010_get_adc_value(data->client);
-	printk("ALS lux value: %d\n", Aval);
-	
-    return IRQ_HANDLED;
+
+	al3010_updata_value(data);
+
+    	return IRQ_HANDLED;
 }
+#else
+static void al3010_work_func(struct work_struct *work)
+{
+	struct al3010_data *data = container_of((struct delayed_work *)work,struct al3010_data, work);
+	unsigned long delay = msecs_to_jiffies(atomic_read(&data->delay));	
+	
+	al3010_updata_value(data);
+
+	schedule_delayed_work(&data->work, delay);
+}
+#endif /* AL3010_INTERRUPT_MODE */
 
 /*
  * I2C layer
@@ -660,7 +730,12 @@ static int __devinit al3010_probe(struct i2c_client *client,
 {
 	struct i2c_adapter *adapter = to_i2c_adapter(client->dev.parent);
 	struct al3010_data *data;
+#ifdef AL3010_INTERRUPT_MODE
+	struct al3010_platform_data *pdata = client->dev.platform_data;
+#endif
 	int err = 0;
+
+	dev_info(&client->dev, "al3010_probe\n");
 
 	if (!i2c_check_functionality(adapter, I2C_FUNC_SMBUS_BYTE))
 		return -EIO;
@@ -672,8 +747,13 @@ static int __devinit al3010_probe(struct i2c_client *client,
 	data->client = client;
 	i2c_set_clientdata(client, data);
 	mutex_init(&data->lock);
+#ifdef AL3010_INTERRUPT_MODE
 	data->irq = client->irq;
-
+#else
+	mutex_init(&data->enable_mutex);
+	atomic_set(&data->enable, 0);
+	atomic_set(&data->delay, AL3010_MAX_DELAY);
+#endif
 	/* initialize the AL3010 chip */
 	err = al3010_init_client(client);
 	if (err)
@@ -688,13 +768,37 @@ static int __devinit al3010_probe(struct i2c_client *client,
 	if (err)
 		goto exit_input;
 
+#ifdef AL3010_INTERRUPT_MODE
+	printk("al3010 irq_gpio %d irq %d\n", pdata->irq_gpio, client->irq);
+	if (gpio_is_valid(pdata->irq_gpio)) {
+		/* configure al3010 irq gpio */
+		err = gpio_request(pdata->irq_gpio, "al3010_irq_gpio");
+		if (err) {
+			dev_err(&client->dev, "unable to request gpio [%d]\n", pdata->irq_gpio);
+			goto exit_input;
+		}
+		err = gpio_direction_input(pdata->irq_gpio);
+		if (err) {
+			dev_err(&client->dev, "unable to set direction for gpio [%d]\n", pdata->irq_gpio);
+			goto exit_input;
+		}
+		printk("al3010 irq_gpio %d irq %d gpio_request succ!!\n", pdata->irq_gpio, client->irq);
+	} else {
+		dev_err(&client->dev, "irq gpio not provided\n");
+		goto exit_input;
+	}
+
 	err = request_threaded_irq(client->irq, NULL, al3010_irq,
                                IRQF_TRIGGER_FALLING,
                                "al3010", data);
-    if (err) {
+	if (err) {
 		dev_err(&client->dev, "ret: %d, could not get IRQ %d\n",err,client->irq);
-            goto exit_input;
-    }
+	    	goto exit_input;
+	}
+	//disable_irq(client->irq);
+#else	
+	INIT_DELAYED_WORK(&data->work, al3010_work_func);
+#endif
 
 	dev_info(&client->dev, "AL3010 driver version %s enabled\n", DRIVER_VERSION);
 	return 0;
@@ -710,7 +814,11 @@ exit_kfree:
 static int __devexit al3010_remove(struct i2c_client *client)
 {
 	struct al3010_data *data = i2c_get_clientdata(client);
+#ifdef AL3010_INTERRUPT_MODE
 	free_irq(data->irq, data);
+#else
+	cancel_delayed_work_sync(&data->work);
+#endif
 	sysfs_remove_group(&client->dev.kobj, &al3010_attr_group);
 	al3010_set_power_state(client, 0);
 	kfree(i2c_get_clientdata(client));
@@ -722,12 +830,22 @@ static int al3010_suspend(struct i2c_client *client, pm_message_t mesg)
 {
 	struct al3010_data *data = i2c_get_clientdata(client);
 
+#ifdef AL3010_INTERRUPT_MODE
 	data->power_state_before_suspend = al3010_get_power_state(client);
-	
+
 	if(device_may_wakeup(&client->dev))
 		enable_irq_wake(data->irq);
-
 	return al3010_set_power_state(client, 0);
+#else
+	mutex_lock(&data->enable_mutex);
+	data->power_state_before_suspend = al3010_get_power_state(client);
+	if (atomic_read(&data->enable) == 1) {
+		al3010_set_power_state(client, 0);
+		cancel_delayed_work_sync(&data->work);
+	}
+	mutex_unlock(&data->enable_mutex);
+	return 0;
+#endif
 }
 
 static int al3010_resume(struct i2c_client *client)
@@ -737,14 +855,24 @@ static int al3010_resume(struct i2c_client *client)
 
 	/* restore registers from cache */
 	for (i = 0; i < ARRAY_SIZE(data->reg_cache); i++)
-		if (i2c_smbus_write_byte_data(client, i, data->reg_cache[i]))
+		if (i2c_smbus_write_byte_data(client, al3010_reg[i], data->reg_cache[i]))
 			return -EIO;
 
+#ifdef AL3010_INTERRUPT_MODE
 	if(device_may_wakeup(&client->dev))
 		disable_irq_wake(data->irq);
-
+	
 	return al3010_set_power_state(client,
 		data->power_state_before_suspend);
+#else
+	mutex_lock(&data->enable_mutex);
+	if (atomic_read(&data->enable) == 1) {
+		al3010_set_power_state(client, data->power_state_before_suspend);
+		schedule_delayed_work(&data->work, msecs_to_jiffies(atomic_read(&data->delay)));
+	}
+	mutex_unlock(&data->enable_mutex);
+	return 0;
+#endif
 }
 
 #else
@@ -753,9 +881,9 @@ static int al3010_resume(struct i2c_client *client)
 #endif /* CONFIG_PM */
 
 static const struct i2c_device_id al3010_id[] = {
-	//{ "al3010", 0 },
-	{ "dyna", 0 },
-	{}
+	{ "al3010", 0 },
+	//{ "dyna", 0 },
+	//{}
 };
 MODULE_DEVICE_TABLE(i2c, al3010_id);
 
