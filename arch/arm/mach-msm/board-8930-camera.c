@@ -646,7 +646,7 @@ static struct msm_camera_csi_lane_params ov5647_csi_lane_params = {
 };
 
 static struct msm_camera_sensor_platform_info sensor_board_info_ov5647 = {
-	.mount_angle  = 90,
+	.mount_angle  = 180,
 	.cam_vreg = msm_8930_qrd_cam_vreg,
 	.num_vreg = ARRAY_SIZE(msm_8930_qrd_cam_vreg),
 	.gpio_conf = &msm_8930_back_cam_gpio_conf,
