@@ -121,6 +121,7 @@ struct socinfo_v7 {
 	uint32_t pmic_model;
 	uint32_t pmic_die_revision;
 	uint32_t tb_hw_platform;
+	uint32_t tb_hw_platform_num;
 };
 
 static union {
