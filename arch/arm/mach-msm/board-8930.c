@@ -2046,42 +2046,53 @@ static struct i2c_board_info mxt_device_info_8930[] __initdata = {
 #define CHG_INOK				55
 #define CFG_PIN_EN_CTRL_ACTIVE_LOW		0x60
 static struct regulator *regulator_lvs2;
+static struct regulator *regulator_lvs1;
 
 static void smb_init_power(bool on)
 {
-	printk("***%s***%d\n", __FUNCTION__, __LINE__);
-	if (on) {
-		printk("***%s***%d\n", __FUNCTION__, __LINE__);
-		regulator_lvs2= regulator_get(NULL, "8038_lvs2");
-		msleep(10);
-		regulator_set_voltage(regulator_lvs2, 1800000, 1800000);
-		msleep(10);
+
+	pr_debug("***%s***on=%d\n", __FUNCTION__, on);
+
+	regulator_lvs2= regulator_get(NULL, "8038_lvs2");
+	msleep(10);
+	regulator_lvs1= regulator_get(NULL, "8038_lvs1");
+	msleep(10);
+
+	if (on) {	
 		regulator_enable(regulator_lvs2);
 		msleep(10);
-		if (gpio_request(CHG_HC_EN, "CHG_HC_EN")) {
-			pr_err("%s.failed to get smb347_IRQ=%d.\n",
-			__FUNCTION__, CHG_HC_EN);
-		}
-		if (gpio_request(CHG_INOK, "CHG_INOK")) {
-			pr_err("%s.failed to get smb347_SYSOK=%d.\n",
-			__FUNCTION__, CHG_INOK);
-		}
+		regulator_enable(regulator_lvs1);
+		msleep(10);
+	}
+	else{
+		
+		regulator_disable(regulator_lvs2);
+		msleep(10);
+		regulator_disable(regulator_lvs1);
+		msleep(10);
+	}
+
+	if (gpio_request(CHG_HC_EN, "CHG_HC_EN")) {
+		pr_err("%s.failed to get smb347_IRQ=%d.\n",
+		__FUNCTION__, CHG_HC_EN);
+	}
+	if (gpio_request(CHG_INOK, "CHG_INOK")) {
+		pr_err("%s.failed to get smb347_SYSOK=%d.\n",
+		__FUNCTION__, CHG_INOK);
 	}
 }
 
 static void smb_enable_charging(bool on)
 {
-	printk("***%s***%d\n", __FUNCTION__, __LINE__);
+	pr_debug("***%s***on=%d\n", __FUNCTION__, on);
 
 	if (on) {
-		printk("***%s***%d\n", __FUNCTION__, __LINE__);
 		if (gpio_direction_output(CHG_HC_EN,1)){
 			pr_err("%s.failed to set smb347_cur_selector=%d.\n",
 			__FUNCTION__, CHG_HC_EN);
 		}
 	}
 	else{
-		printk("***%s***%d\n", __FUNCTION__, __LINE__);
 		if (gpio_direction_output(CHG_HC_EN,0)){
 			pr_err("%s.failed to set smb347_cur_selector=%d.\n",
 			__FUNCTION__, CHG_HC_EN);
