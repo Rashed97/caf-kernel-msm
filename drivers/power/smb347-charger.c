@@ -47,6 +47,7 @@
 #define CFG_PIN					0x06
 #define CFG_PIN_EN_CTRL_MASK			0x60
 #define CFG_PIN_EN_CTRL_USB_HC			0x10
+#define CFG_REG_EN				0x20
 #define CFG_PIN_EN_CTRL_ACTIVE_HIGH		0x40
 #define CFG_PIN_EN_CTRL_ACTIVE_LOW		0x60
 #define CFG_PIN_EN_APSD_IRQ			BIT(1)
@@ -88,6 +89,7 @@
 #define CMD_A_SUSPEND_ENABLED			BIT(2)
 #define CMD_A_ALLOW_WRITE			BIT(7)
 #define CMD_B					0x31
+#define CMD_B_HC_ENABLE				0x01
 #define CMD_C					0x33
 
 /* Interrupt Status registers */
@@ -232,6 +234,51 @@ static int smb347_write(struct smb347_charger *smb, u8 reg, u8 val)
 	return ret;
 }
 
+static int ac_flags;
+/* USB calls these to tell us how much max usb current the system can draw */
+void smb347_charger_vbus_draw(unsigned int mA)
+{
+	pr_debug("Enter charge=%d\n", mA);
+	ac_flags=1;
+}
+EXPORT_SYMBOL_GPL(smb347_charger_vbus_draw);
+
+void update_charger_type(struct smb347_charger *smb)
+{
+	int cfg_ret, cmd_ret;
+	const struct smb347_charger_platform_data *pdata = smb->pdata;
+
+	cfg_ret = smb347_read(smb, CFG_PIN);
+	cfg_ret &= ~CFG_PIN_EN_CTRL_MASK;
+
+	cmd_ret = smb347_read(smb, CMD_B);
+
+	if(smb->mains_online){
+		cfg_ret &= ~CFG_PIN_EN_CTRL_USB_HC;
+		cfg_ret |= CFG_REG_EN;
+		cmd_ret |= CMD_B_HC_ENABLE;
+	}
+	else if(smb->usb_online){
+		cfg_ret |= CFG_PIN_EN_CTRL_USB_HC;
+		cfg_ret |= CFG_PIN_EN_CTRL_ACTIVE_LOW;
+		cmd_ret &= ~CMD_B_HC_ENABLE;
+		pdata->enable_charging(1);
+	}
+	else{
+		cfg_ret |= CFG_PIN_EN_CTRL_USB_HC;
+		cfg_ret |= CFG_PIN_EN_CTRL_ACTIVE_LOW;
+		cmd_ret &= ~CMD_B_HC_ENABLE;
+		pdata->enable_charging(0);
+	}
+
+	/* Disable Automatic Power Source Detection (APSD) interrupt. */
+	cfg_ret &= ~CFG_PIN_EN_APSD_IRQ;
+
+	smb347_write(smb, CFG_PIN, cfg_ret);
+	smb347_write(smb, CMD_B, cmd_ret);
+}
+
+
 /**
  * smb347_update_status - updates the charging status
  * @smb: pointer to smb347 charger instance
@@ -245,7 +292,6 @@ static int smb347_update_status(struct smb347_charger *smb)
 	bool usb = false;
 	bool dc = false;
 	int ret;
-	const struct smb347_charger_platform_data *pdata = smb->pdata;
 
 	ret = smb347_read(smb, IRQSTAT_E);
 	if (ret < 0)
@@ -254,38 +300,22 @@ static int smb347_update_status(struct smb347_charger *smb)
 	 * Dc and usb are set depending on whether they are enabled in
 	 * platform data _and_ whether corresponding undervoltage is set.
 	 */
-	if (smb->pdata->use_mains)
-		dc = !(ret & IRQSTAT_E_DCIN_UV_STAT);
+
+	//if (smb->pdata->use_mains)
+	//	dc  = pm8921_is_dc_chg_plugged_in();
 	if (smb->pdata->use_usb)
-		usb = !(ret & IRQSTAT_E_USBIN_UV_STAT);
-	
+		usb = pm8921_is_usb_chg_plugged_in();
+
 	mutex_lock(&smb->lock);
+
 	ret = smb->mains_online != dc || smb->usb_online != usb;
-	smb->mains_online = dc;
+	//smb->mains_online = dc;
 	smb->usb_online = usb;
+	if (!usb) 
+		ac_flags=0;
+	smb->mains_online =ac_flags;
 
-	ret = smb347_read(smb, CFG_PIN);
-	ret &= ~CFG_PIN_EN_CTRL_MASK;
-	if(smb->mains_online){
-		ret &= ~CFG_PIN_EN_CTRL_USB_HC;
-	}
-	else if(smb->usb_online){
-		ret |= CFG_PIN_EN_CTRL_USB_HC;
-		ret |= CFG_PIN_EN_CTRL_ACTIVE_LOW;
-		pdata->enable_charging(1);
-	}
-	else{
-		ret |= CFG_PIN_EN_CTRL_USB_HC;
-		ret |= CFG_PIN_EN_CTRL_ACTIVE_LOW;
-		pdata->enable_charging(0);
-	}
-
-	/* Disable Automatic Power Source Detection (APSD) interrupt. */
-	ret &= ~CFG_PIN_EN_APSD_IRQ;
-
-	printk("***%s***CFG_PIN=0x%x\n", __FUNCTION__, CFG_PIN);
-
-	ret = smb347_write(smb, CFG_PIN, ret);
+	update_charger_type(smb);
 
 	mutex_unlock(&smb->lock);
 
@@ -377,6 +407,7 @@ static int smb347_update_online(struct smb347_charger *smb)
 {
 	int ret;
 	const struct smb347_charger_platform_data *pdata = smb->pdata;
+
 	/*
 	 * Depending on whether valid power source is connected or not, we
 	 * disable or enable the charging. We do it manually because it
@@ -813,7 +844,6 @@ static irqreturn_t smb347_interrupt(int irq, void *data)
 	if (stat_c & STAT_C_CHARGER_ERROR) {
 		dev_err(&smb->client->dev,
 			"error in charger, disabling charging\n");
-
 		smb347_charging_disable(smb);
 		power_supply_changed(&smb->battery);
 
