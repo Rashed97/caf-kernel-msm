@@ -17,6 +17,11 @@
 #include <linux/types.h>
 #include <linux/power_supply.h>
 
+extern int pm8921_is_usb_chg_plugged_in(void);
+//extern int pm8921_is_dc_chg_plugged_in(void);
+
+void smb347_charger_vbus_draw(unsigned int mA);
+
 enum {
 	/* use the default compensation method */
 	SMB347_SOFT_TEMP_COMPENSATE_DEFAULT = -1,

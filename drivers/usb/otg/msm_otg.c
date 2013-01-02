@@ -38,6 +38,7 @@
 #include <linux/usb/msm_hsusb_hw.h>
 #include <linux/regulator/consumer.h>
 #include <linux/mfd/pm8xxx/pm8921-charger.h>
+#include <linux/power/smb347-charger.h>
 #include <linux/mfd/pm8xxx/misc.h>
 #include <linux/power_supply.h>
 #include <linux/mhl_8334.h>
@@ -1077,7 +1078,6 @@ static int msm_otg_notify_chg_type(struct msm_otg *motg)
 	return 0;
 }
 
-#ifndef CONFIG_CHARGER_SMB347
 static int msm_otg_notify_power_supply(struct msm_otg *motg, unsigned mA)
 {
 
@@ -1104,7 +1104,6 @@ psy_not_supported:
 	dev_dbg(motg->phy.dev, "Power Supply doesn't support USB charger\n");
 	return -ENXIO;
 }
-#endif
 
 static void msm_otg_notify_charger(struct msm_otg *motg, unsigned mA)
 {
@@ -1135,9 +1134,11 @@ static void msm_otg_notify_charger(struct msm_otg *motg, unsigned mA)
 	 *  to legacy pm8921 API.
 	 */
 
-#ifndef CONFIG_CHARGER_SMB347
 	if (msm_otg_notify_power_supply(motg, mA))
+#ifndef CONFIG_CHARGER_SMB347
 		pm8921_charger_vbus_draw(mA);
+#else
+		smb347_charger_vbus_draw(mA);
 #endif
 
 	motg->cur_power = mA;
