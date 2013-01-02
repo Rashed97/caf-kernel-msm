@@ -34,6 +34,7 @@
 #include <linux/kernel.h>
 #include <linux/gpio.h>
 #include <linux/wait.h>
+#include <linux/input/mic_biase_switch.h>
 #include "wcd9304.h"
 
 #define WCD9304_RATES (SNDRV_PCM_RATE_8000|SNDRV_PCM_RATE_16000|\
@@ -4070,6 +4071,8 @@ static void sitar_codec_decide_gpio_plug(struct snd_soc_codec *codec)
 	s32 mic_mv[MBHC_NUM_DCE_PLUG_DETECT];
 	enum sitar_mbhc_plug_type plug_type[MBHC_NUM_DCE_PLUG_DETECT];
 	int i;
+    int mic_mv_total = 0;
+    int mic_mv_arvg = 0;
 
 	pr_debug("%s: enter\n", __func__);
 
@@ -4083,7 +4086,14 @@ static void sitar_codec_decide_gpio_plug(struct snd_soc_codec *codec)
 		mic_mv[i] = sitar_codec_sta_dce_v(codec, 1 , mb_v[i]);
 		pr_debug("%s: DCE run %d, mic_mv = %d\n", __func__, i + 1,
 			 mic_mv[i]);
+        mic_mv_total += mic_mv[i];
 	}
+
+    mic_mv_arvg = mic_mv_total / MBHC_NUM_DCE_PLUG_DETECT;
+    if(mic_mv_arvg < US_HEADSET_DETECT_VLAUE && mic_mv_arvg > HEADPHONE_DETECT_VALUE) {
+        mic_biase_switch_set_enable(MIC_BIASE_SWITCH_INV);
+    }
+
 	sitar_turn_onoff_override(codec, false);
 
 	if (sitar_hs_gpio_level_remove(sitar)) {

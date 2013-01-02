@@ -283,6 +283,9 @@ config SND_SOC_UDA134X
 config SND_SOC_UDA1380
         tristate
 
+config SND_SOC_MIC_BIASE_SWITCH
+	tristate
+
 config SND_SOC_WCD9304
 	tristate
 

@@ -126,6 +126,10 @@
 #include <linux/power/smb347-charger.h>
 #endif
 
+#ifdef CONFIG_SND_SOC_MIC_BIASE_SWITCH
+#include <linux/input/mic_biase_switch.h>
+#endif
+
 static struct platform_device msm_fm_platform_init = {
 	.name = "iris_fm",
 	.id   = -1,
@@ -2147,6 +2151,57 @@ static struct i2c_board_info msm_bq27541_board_info[] __initdata= {
 };
 #endif
 
+#ifdef CONFIG_SND_SOC_MIC_BIASE_SWITCH
+#define GPIO_HS_SWITCH 65
+
+static struct mic_biase_switch_platform_data mic_biase_switch_pdata =
+{
+    .gpio_switch                = GPIO_HS_SWITCH,
+};
+
+static struct platform_device mic_biase_switch_drevice =
+{
+    .name = "mic_biase_switch",
+    .id = -1,
+    .dev = {.platform_data = &mic_biase_switch_pdata},
+};
+
+static struct platform_device *mic_biase_switch_platform_drevice[] __initdata =
+{
+    &mic_biase_switch_drevice,
+};
+
+static struct msm_gpio mic_biase_switch_gpio_cfg_data[] = {
+    {
+        GPIO_CFG(-1, 0, GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_6MA),
+        "gpio_switch"
+    },
+};
+
+static int mic_biase_switch_gpio_setup(void) {
+    int ret = 0;
+    mic_biase_switch_gpio_cfg_data[0].gpio_cfg =
+        GPIO_CFG(65, 0,
+        GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_6MA);
+    ret = gpio_request(65, "gpio_switch");
+
+    if( ret < 0)
+        printk(KERN_ERR "%s: Failed to obtain mic_biase_switch int GPIO %d. Code: %d\n", __func__, GPIO_HS_SWITCH, ret);
+    ret = gpio_direction_output(65,1);
+    if (ret < 0)
+        printk(KERN_ERR "%s: Failed to obtain mic_biase_switch int GPIO %d. Code: %d\n", __func__, GPIO_HS_SWITCH, ret);
+    return ret;
+}
+
+void __init msm_mic_biase_switch_init(void) {
+    mic_biase_switch_gpio_setup();
+    pr_info("gpio_register_board_info MIC_BIASE_SWITCH\n");
+
+    platform_add_devices(mic_biase_switch_platform_drevice, ARRAY_SIZE(mic_biase_switch_platform_drevice));
+}
+
+#endif
+
 /* 	Synaptics Thin Driver	*/
 #if defined(CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_RMI4_I2C) || defined(CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_RMI4_I2C_MODULE)
 #define S7300_ADDR	0x20
@@ -3296,6 +3351,9 @@ static void __init msm8930_cdp_init(void)
 	change_memory_power = &msm8930_change_memory_power;
 	BUG_ON(msm_pm_boot_init(&msm_pm_boot_pdata));
 	msm_pm_set_tz_retention_flag(1);
+#ifdef CONFIG_SND_SOC_MIC_BIASE_SWITCH
+    msm_mic_biase_switch_init();
+#endif
 
 	if (PLATFORM_IS_CHARM25())
 		platform_add_devices(mdm_devices, ARRAY_SIZE(mdm_devices));
