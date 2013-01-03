@@ -900,8 +900,7 @@ int __init msm8930_init_gpiomux(void)
 	msm_gpiomux_install(msm8930_sd_det_config,
 			ARRAY_SIZE(msm8930_sd_det_config));
 
-	if (machine_is_msm8930_fluid() || machine_is_msm8930_mtp())
-		msm_gpiomux_install(msm8930_gyro_int_config,
+	msm_gpiomux_install(msm8930_gyro_int_config,
 			ARRAY_SIZE(msm8930_gyro_int_config));
 
 	msm_gpiomux_install(msm8930_compass_int_config,
