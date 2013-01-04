@@ -130,6 +130,10 @@
 #include <linux/input/mic_biase_switch.h>
 #endif
 
+#ifdef CONFIG_PSENSOR_IQS128
+#include <linux/iqs128.h>
+#endif
+
 static struct platform_device msm_fm_platform_init = {
 	.name = "iris_fm",
 	.id   = -1,
@@ -237,6 +241,42 @@ static int __init pmem_audio_size_setup(char *p)
 	return 0;
 }
 early_param("pmem_audio_size", pmem_audio_size_setup);
+#endif
+
+#ifdef CONFIG_PSENSOR_IQS128
+
+#define IQS128_GPIO23_IRQ		23
+#define IQS128_GPIO24_IRQ		24
+#define IQS128_GPIO92_IRQ		92
+
+static struct iqs128_gpio_data iqs128_gpio_data[] = {
+	{
+		.irq_gpio = IQS128_GPIO23_IRQ,
+		.irq = MSM_GPIO_TO_INT(IQS128_GPIO23_IRQ),
+		.irqflags = IRQF_TRIGGER_FALLING | IRQF_TRIGGER_RISING,
+	},
+	{
+		.irq_gpio = IQS128_GPIO24_IRQ,
+		.irq = MSM_GPIO_TO_INT(IQS128_GPIO24_IRQ),
+		.irqflags = IRQF_TRIGGER_FALLING | IRQF_TRIGGER_RISING,
+	},
+	{
+		.irq_gpio = IQS128_GPIO92_IRQ,
+		.irq = MSM_GPIO_TO_INT(IQS128_GPIO92_IRQ),
+		.irqflags = IRQF_TRIGGER_FALLING | IRQF_TRIGGER_RISING,
+	},
+};
+
+struct iqs128_platform_data iqs128_pdata = {
+	.num_data = ARRAY_SIZE(iqs128_gpio_data),
+	.gpio_data = iqs128_gpio_data,
+};
+
+static struct platform_device iqs128_device = {
+	.name = "iqs128",
+	.id = 0,
+	.dev = {.platform_data = &iqs128_pdata},
+};
 #endif
 
 #ifdef CONFIG_ANDROID_PMEM
@@ -2688,6 +2728,9 @@ static struct platform_device *common_devices[] __initdata = {
 	&msm_device_sps,
 #ifdef CONFIG_MSM_FAKE_BATTERY
 	&fish_battery_device,
+#endif
+#ifdef CONFIG_PSENSOR_IQS128
+	&iqs128_device,
 #endif
 #ifdef CONFIG_ANDROID_PMEM
 #ifndef CONFIG_MSM_MULTIMEDIA_USE_ION
