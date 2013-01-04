@@ -18,6 +18,10 @@
 
 #define PM8921_CHARGER_DEV_NAME	"pm8921-charger"
 
+extern int battery_mvolts;
+extern int battery_capacity;
+extern int battery_temperature;
+
 struct pm8xxx_charger_core_data {
 	unsigned int	vbat_channel;
 	unsigned int	batt_temp_channel;

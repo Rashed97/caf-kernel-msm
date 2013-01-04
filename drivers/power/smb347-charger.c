@@ -1081,25 +1081,15 @@ static int smb347_battery_get_property(struct power_supply *psy,
 		break;
 
 	case POWER_SUPPLY_PROP_VOLTAGE_MIN_DESIGN:
-		val->intval = pdata->battery_info.voltage_min_design;
+		val->intval = 3200000;
 		break;
 
 	case POWER_SUPPLY_PROP_VOLTAGE_MAX_DESIGN:
-		val->intval = pdata->battery_info.voltage_max_design;
+		val->intval = 4200000;
 		break;
 
 	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
-		if (!smb347_is_online(smb))
-			return -ENODATA;
-		ret = smb347_read(smb, STAT_A);
-		if (ret < 0)
-			return ret;
-
-		ret &= STAT_A_FLOAT_VOLTAGE_MASK;
-		if (ret > 0x3d)
-			ret = 0x3d;
-
-		val->intval = 3500000 + ret * 20000;
+		val->intval = battery_mvolts;
 		break;
 
 	case POWER_SUPPLY_PROP_CURRENT_NOW:
@@ -1130,6 +1120,14 @@ static int smb347_battery_get_property(struct power_supply *psy,
 		val->intval = pdata->battery_info.charge_full_design;
 		break;
 
+	case POWER_SUPPLY_PROP_CAPACITY:
+		val->intval = battery_capacity;
+		break;
+
+	case POWER_SUPPLY_PROP_TEMP:
+		val->intval = battery_temperature;
+		break;
+
 	case POWER_SUPPLY_PROP_MODEL_NAME:
 		val->strval = pdata->battery_info.name;
 		break;
@@ -1150,6 +1148,8 @@ static enum power_supply_property smb347_battery_properties[] = {
 	POWER_SUPPLY_PROP_VOLTAGE_NOW,
 	POWER_SUPPLY_PROP_CURRENT_NOW,
 	POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN,
+	POWER_SUPPLY_PROP_CAPACITY,
+	POWER_SUPPLY_PROP_TEMP,
 	POWER_SUPPLY_PROP_MODEL_NAME,
 };
 
