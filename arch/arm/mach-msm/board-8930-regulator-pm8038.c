@@ -107,6 +107,7 @@ VREG_CONSUMERS(L11) = {
 };
 VREG_CONSUMERS(L12) = {
 	REGULATOR_SUPPLY("8038_l12",		NULL),
+	REGULATOR_SUPPLY("dsi_lvds_vddc",		"mipi_dsi.1"),
 	REGULATOR_SUPPLY("cam_vdig",		"4-001a"),
 	REGULATOR_SUPPLY("cam_vdig",		"4-006c"),
 	REGULATOR_SUPPLY("cam_vdig",		"4-0048"),

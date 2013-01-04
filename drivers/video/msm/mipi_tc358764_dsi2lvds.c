@@ -73,6 +73,7 @@
 #include "mdp4.h"
 #include "mipi_dsi.h"
 #include "mipi_tc358764_dsi2lvds.h"
+#include "../../../../arch/arm/mach-msm/include/mach/socinfo.h"
 
 /* Registers definition */
 
@@ -188,7 +189,7 @@
 #define DEBUG01		0x05A4	/* LVDS Data */
 
 /* PWM */
-static u32 d2l_pwm_freq_hz = (3.921*1000);
+static u32 d2l_pwm_freq_hz = (1 * 1000);
 
 #define PWM_FREQ_HZ	(d2l_pwm_freq_hz)
 #define PWM_PERIOD_USEC (USEC_PER_SEC / PWM_FREQ_HZ)
@@ -374,35 +375,56 @@ static int mipi_d2l_dsi_init_sequence(struct msm_fb_data_type *mfd)
 		 mfd->panel_info.mipi.frame_rate,
 		 mfd->panel_info.mipi.dst_format);
 
-	hbpr = mfd->panel_info.lcdc.h_back_porch;
-	hpw	= mfd->panel_info.lcdc.h_pulse_width;
-	vbpr = mfd->panel_info.lcdc.v_back_porch;
-	vpw	= mfd->panel_info.lcdc.v_pulse_width;
+	if (machine_is_msm8x30_type1()) {
+		hbpr = 80;
+		hpw = 80;
+		vbpr = 10;
+		vpw = 10;
+		hfpr = 160;
+		vfpr = 15;
+		vpctrl = 0x00000020; /* Output RGB888 , Event-Mode , */
+		ppi_tx_rx_ta = 0x00060008;
+	} else if (machine_is_msm8x30_type2()) {
+		hbpr = 40;
+		hpw = 40;
+		vbpr = 8;
+		vpw = 8;
+		hfpr = 80;
+		vfpr = 7;
+		vpctrl = 0x00000020; /* Output RGB888 , Event-Mode , */
+		ppi_tx_rx_ta = 0x0008000B;
+	} else {
+		hbpr = mfd->panel_info.lcdc.h_back_porch;
+		hpw     = mfd->panel_info.lcdc.h_pulse_width;
+		vbpr = mfd->panel_info.lcdc.v_back_porch;
+		vpw     = mfd->panel_info.lcdc.v_pulse_width;
+		hfpr = mfd->panel_info.lcdc.h_front_porch;
+		vfpr = mfd->panel_info.lcdc.v_front_porch;
+		vpctrl = 0x01000120; /* Output RGB888 , Event-Mode , */
+		ppi_tx_rx_ta = 0x00040004;
+	}
 
 	htime1 = (hbpr << 16) + hpw;
 	vtime1 = (vbpr << 16) + vpw;
 
-	hfpr = mfd->panel_info.lcdc.h_front_porch;
 	hsize = mfd->panel_info.xres;
-	vfpr = mfd->panel_info.lcdc.v_front_porch;
 	vsize = mfd->panel_info.yres;
 
 	htime2 = (hfpr << 16) + hsize;
 	vtime2 = (vfpr << 16) + vsize;
 
-	lvcfg = 0x0003; /* PCLK=DCLK/3, Dual Link, LVEN */
-	vpctrl = 0x01000120; /* Output RGB888 , Event-Mode , */
-	ppi_tx_rx_ta = 0x00040004;
-
-	if (mfd->panel_info.xres == 1366) {
+	if (machine_is_msm8x30_type1() || machine_is_msm8x30_type2()) {
+		lvcfg = 0x0101; /* PCLK=DCLK/4, Dual Link, LVEN */
+		vesa_rgb888 = true;
+	} else if (mfd->panel_info.xres == 1366) {
 		ppi_tx_rx_ta = 0x00040004;
 		lvcfg = 0x01; /* LVEN */
 		vesa_rgb888 = true;
-	}
-
-	if (mfd->panel_info.xres == 1200) {
+	} else if (mfd->panel_info.xres == 1200) {
 		lvcfg = 0x0103; /* PCLK=DCLK/4, Dual Link, LVEN */
 		vesa_rgb888 = true;
+	} else {
+		lvcfg = 0x0003; /* PCLK=DCLK/3, Dual Link, LVEN */
 	}
 
 	pr_debug("%s.htime1=0x%x.\n", __func__, htime1);
@@ -413,23 +435,29 @@ static int mipi_d2l_dsi_init_sequence(struct msm_fb_data_type *mfd)
 	mipi_d2l_write_reg(mfd, SYSRST, 0xFF);
 	msleep(30);
 
-	if (vesa_rgb888) {
-		/* VESA format instead of JEIDA format for RGB888 */
-		mipi_d2l_write_reg(mfd, LVMX0003, 0x03020100);
-		mipi_d2l_write_reg(mfd, LVMX0407, 0x08050704);
-		mipi_d2l_write_reg(mfd, LVMX0811, 0x0F0E0A09);
-		mipi_d2l_write_reg(mfd, LVMX1215, 0x100D0C0B);
-		mipi_d2l_write_reg(mfd, LVMX1619, 0x12111716);
-		mipi_d2l_write_reg(mfd, LVMX2023, 0x1B151413);
-		mipi_d2l_write_reg(mfd, LVMX2427, 0x061A1918);
+	if (machine_is_msm8x30_type1()) {
+		mipi_d2l_write_reg(mfd, PPI_TX_RX_TA, ppi_tx_rx_ta); /* BTA */
+		mipi_d2l_write_reg(mfd, PPI_LPTXTIMECNT, 0x00000005);
+		mipi_d2l_write_reg(mfd, PPI_D0S_CLRSIPOCOUNT, 0x00000004);
+		mipi_d2l_write_reg(mfd, PPI_D1S_CLRSIPOCOUNT, 0x00000004);
+		mipi_d2l_write_reg(mfd, PPI_D2S_CLRSIPOCOUNT, 0x00000004);
+		mipi_d2l_write_reg(mfd, PPI_D3S_CLRSIPOCOUNT, 0x00000004);
+	} else if (machine_is_msm8x30_type2()) {
+		mipi_d2l_write_reg(mfd, PPI_TX_RX_TA, ppi_tx_rx_ta); /* BTA */
+		mipi_d2l_write_reg(mfd, PPI_LPTXTIMECNT, 0x00000007);
+		mipi_d2l_write_reg(mfd, PPI_D0S_CLRSIPOCOUNT, 0x00000007);
+		mipi_d2l_write_reg(mfd, PPI_D1S_CLRSIPOCOUNT, 0x00000007);
+		mipi_d2l_write_reg(mfd, PPI_D2S_CLRSIPOCOUNT, 0x00000007);
+		mipi_d2l_write_reg(mfd, PPI_D3S_CLRSIPOCOUNT, 0x00000007);
+	} else {
+		mipi_d2l_write_reg(mfd, PPI_TX_RX_TA, ppi_tx_rx_ta); /* BTA */
+		mipi_d2l_write_reg(mfd, PPI_LPTXTIMECNT, 0x00000004);
+		mipi_d2l_write_reg(mfd, PPI_D0S_CLRSIPOCOUNT, 0x00000003);
+		mipi_d2l_write_reg(mfd, PPI_D1S_CLRSIPOCOUNT, 0x00000003);
+		mipi_d2l_write_reg(mfd, PPI_D2S_CLRSIPOCOUNT, 0x00000003);
+		mipi_d2l_write_reg(mfd, PPI_D3S_CLRSIPOCOUNT, 0x00000003);
 	}
 
-	mipi_d2l_write_reg(mfd, PPI_TX_RX_TA, ppi_tx_rx_ta); /* BTA */
-	mipi_d2l_write_reg(mfd, PPI_LPTXTIMECNT, 0x00000004);
-	mipi_d2l_write_reg(mfd, PPI_D0S_CLRSIPOCOUNT, 0x00000003);
-	mipi_d2l_write_reg(mfd, PPI_D1S_CLRSIPOCOUNT, 0x00000003);
-	mipi_d2l_write_reg(mfd, PPI_D2S_CLRSIPOCOUNT, 0x00000003);
-	mipi_d2l_write_reg(mfd, PPI_D3S_CLRSIPOCOUNT, 0x00000003);
 	mipi_d2l_write_reg(mfd, PPI_LANEENABLE, lanes_enable);
 	mipi_d2l_write_reg(mfd, DSI_LANEENABLE, lanes_enable);
 	mipi_d2l_write_reg(mfd, PPI_STARTPPI, 0x00000001);
@@ -441,6 +469,49 @@ static int mipi_d2l_dsi_init_sequence(struct msm_fb_data_type *mfd)
 	mipi_d2l_write_reg(mfd, HTIM2, htime2);
 	mipi_d2l_write_reg(mfd, VTIM2, vtime2);
 	mipi_d2l_write_reg(mfd, VFUEN, 0x00000001);
+
+	if (machine_is_msm8x30_type1()) {
+		mipi_d2l_write_reg(mfd, LVPHY0, 0x0044802D);
+		udelay(200);
+		mipi_d2l_write_reg(mfd, LVPHY0, 0x0004802D);
+		mipi_d2l_write_reg(mfd, SYSRST, 0x4);
+	} else if (machine_is_msm8x30_type2()) {
+		mipi_d2l_write_reg(mfd, LVPHY0, 0x00448006);
+		udelay(200);
+		mipi_d2l_write_reg(mfd, LVPHY0, 0x00048006);
+		mipi_d2l_write_reg(mfd, SYSRST, 0x4);
+	}
+
+	if (vesa_rgb888) {
+		/* VESA format instead of JEIDA format for RGB888 */
+		if (machine_is_msm8x30_type1()) {
+			mipi_d2l_write_reg(mfd, LVMX0003, 0x03020100);
+			mipi_d2l_write_reg(mfd, LVMX0407, 0x08050704);
+			mipi_d2l_write_reg(mfd, LVMX0811, 0x0F0E0A09);
+			mipi_d2l_write_reg(mfd, LVMX1215, 0x100D0C0B);
+			mipi_d2l_write_reg(mfd, LVMX1619, 0x12111716);
+			mipi_d2l_write_reg(mfd, LVMX2023, 0x1B151413);
+			mipi_d2l_write_reg(mfd, LVMX2427, 0x061A1918);
+		} else if (machine_is_msm8x30_type2()) {
+			mipi_d2l_write_reg(mfd, LVMX0003, 0x05040302);
+			mipi_d2l_write_reg(mfd, LVMX0407, 0x0A070706);
+			mipi_d2l_write_reg(mfd, LVMX0811, 0x0F0E0C0B);
+			mipi_d2l_write_reg(mfd, LVMX1215, 0x120F0E0D);
+			mipi_d2l_write_reg(mfd, LVMX1619, 0x14131716);
+			mipi_d2l_write_reg(mfd, LVMX2023, 0x1B171615);
+			mipi_d2l_write_reg(mfd, LVMX2427, 0x061A1918);
+		} else {
+			/* VESA format instead of JEIDA format for RGB888 */
+			mipi_d2l_write_reg(mfd, LVMX0003, 0x03020100);
+			mipi_d2l_write_reg(mfd, LVMX0407, 0x08050704);
+			mipi_d2l_write_reg(mfd, LVMX0811, 0x0F0E0A09);
+			mipi_d2l_write_reg(mfd, LVMX1215, 0x100D0C0B);
+			mipi_d2l_write_reg(mfd, LVMX1619, 0x12111716);
+			mipi_d2l_write_reg(mfd, LVMX2023, 0x1B151413);
+			mipi_d2l_write_reg(mfd, LVMX2427, 0x061A1918);
+		}
+	}
+
 	mipi_d2l_write_reg(mfd, LVCFG, lvcfg); /* Enables LVDS tx */
 
 	return 0;
@@ -552,11 +623,7 @@ static int mipi_d2l_lcd_on(struct platform_device *pdev)
 	if (ret)
 		return ret;
 
-	mipi_d2l_write_reg(mfd, GPIOC, d2l_gpio_out_mask);
-	/* Set gpio#4=U/D=0, gpio#3=L/R=1 , gpio#2,1=CABC=0, gpio#0=NA. */
-	mipi_d2l_write_reg(mfd, GPIOO, d2l_gpio_out_val);
-
-	d2l_pwm_freq_hz = (3.921*1000);
+	d2l_pwm_freq_hz = (1 * 1000);
 
 	if (bl_level == 0)
 		bl_level = PWM_LEVEL * 2 / 3 ; /* Default ON value */
@@ -879,15 +946,18 @@ static int __devinit mipi_d2l_probe(struct platform_device *pdev)
 		pr_err("%s. led_pwm is invalid.\n", __func__);
 	}
 
-	tn_pwm = pwm_request(1, "3D_TN_clk");
-	if (tn_pwm == NULL || IS_ERR(tn_pwm)) {
-		pr_err("%s pwm_request() failed.id=%d.tn_pwm=%d.\n",
-		       __func__, 1, (int) tn_pwm);
-		tn_pwm = NULL;
-		return -EIO;
+	if (machine_is_msm8x30_type1() || machine_is_msm8x30_type2()) {
+		pr_debug("disable 3D_TN_clk.\n");
 	} else {
-		pr_debug("%s.pwm_request() ok.pwm-id=%d.\n", __func__, 1);
-
+		tn_pwm = pwm_request(1, "3D_TN_clk");
+		if (tn_pwm == NULL || IS_ERR(tn_pwm)) {
+			pr_err("%s pwm_request() failed.id=%d.tn_pwm=%d.\n",
+					__func__, 1, (int) tn_pwm);
+			tn_pwm = NULL;
+			return -EIO;
+		} else {
+			pr_debug("%s.pwm_request() ok.pwm-id=%d.\n", __func__, 1);
+		}
 	}
 
 	pinfo = pdev->dev.platform_data;
