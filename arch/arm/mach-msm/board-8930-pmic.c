@@ -144,8 +144,8 @@ struct pm8xxx_mpp_init {
 
 /* GPIO and MPP configurations for MSM8930 + PM8038 targets */
 
-/* Initial PM8038 GPIO configurations */
-static struct pm8xxx_gpio_init pm8038_gpios[] __initdata = {
+/* Initial PM8038 TYPE1 GPIO configurations */
+static struct pm8xxx_gpio_init pm8038_gpios_type1[] __initdata = {
 	/* keys GPIOs */
 	PM8038_GPIO_INPUT(3, PM_GPIO_PULL_UP_30),
 	PM8038_GPIO_INPUT(8, PM_GPIO_PULL_UP_30),
@@ -155,6 +155,23 @@ static struct pm8xxx_gpio_init pm8038_gpios[] __initdata = {
 	PM8038_GPIO_OUTPUT_FUNC(7, 0, PM_GPIO_FUNC_1),
 	/* MHL PWR EN */
 	PM8038_GPIO_OUTPUT_VIN(5, 1, PM8038_GPIO_VIN_VPH),
+	/* LCM backlight PWM */
+	PM8038_GPIO_OUTPUT_FUNC(2, 0, PM_GPIO_FUNC_1),
+};
+
+/* Initial PM8038 TYPE2 GPIO configurations */
+static struct pm8xxx_gpio_init pm8038_gpios_type2[] __initdata = {
+	/* keys GPIOs */
+	PM8038_GPIO_INPUT(3, PM_GPIO_PULL_UP_30),
+	PM8038_GPIO_INPUT(8, PM_GPIO_PULL_UP_30),
+	PM8038_GPIO_INPUT(10, PM_GPIO_PULL_UP_30),
+	PM8038_GPIO_INPUT(11, PM_GPIO_PULL_UP_30),
+	/* haptics gpio */
+	PM8038_GPIO_OUTPUT_FUNC(7, 0, PM_GPIO_FUNC_1),
+	/* MHL PWR EN */
+	PM8038_GPIO_OUTPUT_VIN(5, 1, PM8038_GPIO_VIN_VPH),
+	/* LCM backlight PWM */
+	PM8038_GPIO_OUTPUT_FUNC(1, 0, PM_GPIO_FUNC_1),
 };
 
 /* Initial PM8038 MPP configurations */
@@ -186,12 +203,23 @@ void __init msm8930_pm8038_gpio_mpp_init(void)
 {
 	int i, rc;
 
-	for (i = 0; i < ARRAY_SIZE(pm8038_gpios); i++) {
-		rc = pm8xxx_gpio_config(pm8038_gpios[i].gpio,
-					&pm8038_gpios[i].config);
-		if (rc) {
-			pr_err("%s: pm8xxx_gpio_config: rc=%d\n", __func__, rc);
-			break;
+	if (machine_is_msm8x30_type1()) {
+		for (i = 0; i < ARRAY_SIZE(pm8038_gpios_type1); i++) {
+			rc = pm8xxx_gpio_config(pm8038_gpios_type1[i].gpio,
+					&pm8038_gpios_type1[i].config);
+			if (rc) {
+				pr_err("%s: pm8xxx_gpio_config: rc=%d\n", __func__, rc);
+				break;
+			}
+		}
+	} else if (machine_is_msm8x30_type2()) {
+		for (i = 0; i < ARRAY_SIZE(pm8038_gpios_type2); i++) {
+			rc = pm8xxx_gpio_config(pm8038_gpios_type2[i].gpio,
+					&pm8038_gpios_type2[i].config);
+			if (rc) {
+				pr_err("%s: pm8xxx_gpio_config: rc=%d\n", __func__, rc);
+				break;
+			}
 		}
 	}
 
