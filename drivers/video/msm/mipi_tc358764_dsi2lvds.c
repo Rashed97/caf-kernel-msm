@@ -382,7 +382,7 @@ static int mipi_d2l_dsi_init_sequence(struct msm_fb_data_type *mfd)
 		vpw = 10;
 		hfpr = 160;
 		vfpr = 15;
-		vpctrl = 0x00000020; /* Output RGB888 , Event-Mode , */
+		vpctrl = 0x00000120; /* Output RGB888 , Event-Mode , */
 		ppi_tx_rx_ta = 0x00060008;
 	} else if (machine_is_msm8x30_type2()) {
 		hbpr = 40;
