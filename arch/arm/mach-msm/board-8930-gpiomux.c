@@ -31,30 +31,6 @@ static struct gpiomux_setting spi_suspended_config = {
 	.pull = GPIOMUX_PULL_DOWN,
 };
 
-static struct gpiomux_setting lr_suspended_config = {
-	.func = GPIOMUX_FUNC_GPIO,
-	.drv = GPIOMUX_DRV_2MA,
-	.pull = GPIOMUX_PULL_UP,
-};
-
-static struct gpiomux_setting lr_active_config = {
-	.func = GPIOMUX_FUNC_GPIO,
-	.drv = GPIOMUX_DRV_2MA,
-	.pull = GPIOMUX_PULL_DOWN,
-};
-
-static struct gpiomux_setting ud_suspended_config = {
-	.func = GPIOMUX_FUNC_GPIO,
-	.drv = GPIOMUX_DRV_2MA,
-	.pull = GPIOMUX_PULL_DOWN,
-};
-
-static struct gpiomux_setting ud_active_config = {
-	.func = GPIOMUX_FUNC_GPIO,
-	.drv = GPIOMUX_DRV_2MA,
-	.pull = GPIOMUX_PULL_UP,
-};
-
 static struct gpiomux_setting dsi_lvds_pwr_suspended_config = {
 	.func = GPIOMUX_FUNC_GPIO,
 	.drv = GPIOMUX_DRV_2MA,
@@ -421,21 +397,13 @@ static struct msm_gpiomux_config msm8960_gsbi_configs[] __initdata = {
 	{
 		.gpio      = 22,	/* GSBI5 UART2 */
 		.settings = {
-			[GPIOMUX_SUSPENDED] = &lr_suspended_config,
-			[GPIOMUX_ACTIVE] = &lr_active_config,
+			[GPIOMUX_SUSPENDED] = &gsbi5,
 		},
 	},
 	{
 		.gpio      = 23,	/* GSBI5 UART2 */
 		.settings = {
 			[GPIOMUX_SUSPENDED] = &gsbi5,
-		},
-	},
-	{
-		.gpio      = 25,	/* GSBI5 UART2 */
-		.settings = {
-			[GPIOMUX_SUSPENDED] = &ud_suspended_config,
-			[GPIOMUX_ACTIVE] = &ud_active_config,
 		},
 	},
 	{
