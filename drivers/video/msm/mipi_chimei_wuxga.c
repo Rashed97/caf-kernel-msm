@@ -86,16 +86,16 @@ static int __init mipi_chimei_wuxga_init(void)
 	if (msm_fb_detect_client("mipi_video_chimei_wuxga"))
 		return 0;
 
-	pr_err("mipi-dsi chimei wuxga (1200x1920) driver ver 1.0.\n");
+	pr_info("mipi-dsi chimei wuxga (1200x1920) driver ver 1.0.\n");
 
 	/* Portrait */
-	pinfo->xres = 1280;
-	pinfo->yres = 800;
+	pinfo->xres = 1200;
+	pinfo->yres = 1920;
 	pinfo->type =  MIPI_VIDEO_PANEL;
 	pinfo->pdest = DISPLAY_1; /* Primary Display */
 	pinfo->wait_cycle = 0;
 	pinfo->bpp = 24; /* RGB565 requires 24 bits-per-pixel :-O */
-	pinfo->fb_num = 3; /* using two frame buffers */
+	pinfo->fb_num = 2; /* using two frame buffers */
 
 	/*
 	 * The CMI panel requires 80 MHZ LVDS-CLK.
@@ -104,20 +104,20 @@ static int __init mipi_chimei_wuxga_init(void)
 	 * LVDS-CLK = DSI-CLK/4 , 320 MHZ/4= 80 MHZ.
 	 */
 
-	pinfo->clk_rate = 570 * MHZ; /* bitclk Calculated */
+	pinfo->clk_rate = 635 * MHZ ; /* bitclk Calculated */
 
 	/*
 	 * this panel is operated by DE,
 	 * vsycn and hsync are ignored
 	 */
 
-	pinfo->lcdc.h_front_porch = 474;	/* thfp */
-	pinfo->lcdc.h_back_porch = 10;	/* thb */
-	pinfo->lcdc.h_pulse_width = 160;	/* thpw */
+	pinfo->lcdc.h_front_porch = 160-48-32;	/* thfp */
+	pinfo->lcdc.h_back_porch = 48;	/* thb */
+	pinfo->lcdc.h_pulse_width = 32;	/* thpw */
 
-	pinfo->lcdc.v_front_porch = 7;	/* tvfp */
-	pinfo->lcdc.v_back_porch = 8;	/* tvb */
-	pinfo->lcdc.v_pulse_width = 8;	/* tvpw */
+	pinfo->lcdc.v_front_porch = 26-3-6;	/* tvfp */
+	pinfo->lcdc.v_back_porch = 3;	/* tvb */
+	pinfo->lcdc.v_pulse_width = 6;	/* tvpw */
 
 	pinfo->lcdc.border_clr = 0;		/* black */
 	pinfo->lcdc.underflow_clr = 0xff;	/* blue */
@@ -151,7 +151,7 @@ static int __init mipi_chimei_wuxga_init(void)
 	 * thus the DSI-to-LVDS bridge output is RGB888.
 	 * This parameter selects the DSI-Core output to the bridge.
 	 */
-	pinfo->mipi.dst_format = DSI_VIDEO_DST_FORMAT_RGB888;
+	pinfo->mipi.dst_format = DSI_VIDEO_DST_FORMAT_RGB565;
 
 	/* mipi - video mode */
 	pinfo->mipi.traffic_mode = DSI_NON_BURST_SYNCH_EVENT;
@@ -181,7 +181,7 @@ static int __init mipi_chimei_wuxga_init(void)
 	pinfo->mipi.no_max_pkt_size = 1;
 	pinfo->mipi.force_clk_lane_hs = 1;
 
-	pinfo->is_3d_panel = false;
+	pinfo->is_3d_panel = FB_TYPE_3D_PANEL;
 
 	ret = mipi_tc358764_dsi2lvds_register(pinfo, MIPI_DSI_PRIM, 1);
 	if (ret)
