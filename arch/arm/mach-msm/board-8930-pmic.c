@@ -155,8 +155,6 @@ static struct pm8xxx_gpio_init pm8038_gpios[] __initdata = {
 	PM8038_GPIO_OUTPUT_FUNC(7, 0, PM_GPIO_FUNC_1),
 	/* MHL PWR EN */
 	PM8038_GPIO_OUTPUT_VIN(5, 1, PM8038_GPIO_VIN_VPH),
-	/* LCM backlight PWM */
-	PM8038_GPIO_OUTPUT_FUNC(1, 0, PM_GPIO_FUNC_1),
 };
 
 /* Initial PM8038 MPP configurations */
