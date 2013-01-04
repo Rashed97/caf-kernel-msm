@@ -20,6 +20,10 @@
 extern int pm8921_is_usb_chg_plugged_in(void);
 //extern int pm8921_is_dc_chg_plugged_in(void);
 
+extern int battery_mvolts;
+extern int battery_capacity;
+extern int battery_temperature;
+
 void smb347_charger_vbus_draw(unsigned int mA);
 
 enum {
