@@ -188,7 +188,7 @@
 #define DEBUG01		0x05A4	/* LVDS Data */
 
 /* PWM */
-static u32 d2l_pwm_freq_hz = (1500);
+static u32 d2l_pwm_freq_hz = (3.921*1000);
 
 #define PWM_FREQ_HZ	(d2l_pwm_freq_hz)
 #define PWM_PERIOD_USEC (USEC_PER_SEC / PWM_FREQ_HZ)
@@ -259,7 +259,7 @@ static u32 mipi_d2l_read_reg(struct msm_fb_data_type *mfd, u16 reg)
 	if (len != 4)
 		pr_err("%s: invalid rlen=%d, expecting 4.\n", __func__, len);
 
-	pr_err("%s: reg=0x%x.data=0x%08x.\n", __func__, reg, data);
+	pr_debug("%s: reg=0x%x.data=0x%08x.\n", __func__, reg, data);
 
 	return data;
 }
@@ -284,7 +284,7 @@ static int mipi_d2l_write_reg(struct msm_fb_data_type *mfd, u16 reg, u32 data)
 	/* mutex had been acquried at dsi_on */
 	mipi_dsi_cmds_tx(&d2l_tx_buf, &cmd_write_reg, 1);
 
-	pr_err("%s: reg=0x%x. data=0x%x.\n", __func__, reg, data);
+	pr_debug("%s: reg=0x%x. data=0x%x.\n", __func__, reg, data);
 
 	return 0;
 }
@@ -367,32 +367,32 @@ static int mipi_d2l_dsi_init_sequence(struct msm_fb_data_type *mfd)
 		return -EINVAL;
 	}
 
-	pr_err("%s.xres=%d.yres=%d.fps=%d.dst_format=%d.\n",
+	pr_debug("%s.xres=%d.yres=%d.fps=%d.dst_format=%d.\n",
 		__func__,
 		 mfd->panel_info.xres,
 		 mfd->panel_info.yres,
 		 mfd->panel_info.mipi.frame_rate,
 		 mfd->panel_info.mipi.dst_format);
 
-	hbpr = 40;
-	hpw = 40;
-	vbpr = 8;
-	vpw = 8;
+	hbpr = mfd->panel_info.lcdc.h_back_porch;
+	hpw	= mfd->panel_info.lcdc.h_pulse_width;
+	vbpr = mfd->panel_info.lcdc.v_back_porch;
+	vpw	= mfd->panel_info.lcdc.v_pulse_width;
 
 	htime1 = (hbpr << 16) + hpw;
 	vtime1 = (vbpr << 16) + vpw;
 
-	hfpr = 80;
+	hfpr = mfd->panel_info.lcdc.h_front_porch;
 	hsize = mfd->panel_info.xres;
-	vfpr = 7;
+	vfpr = mfd->panel_info.lcdc.v_front_porch;
 	vsize = mfd->panel_info.yres;
 
 	htime2 = (hfpr << 16) + hsize;
 	vtime2 = (vfpr << 16) + vsize;
 
 	lvcfg = 0x0003; /* PCLK=DCLK/3, Dual Link, LVEN */
-	vpctrl = 0x00000020; /* Output RGB888 , Event-Mode , */
-	ppi_tx_rx_ta = 0x0008000B;
+	vpctrl = 0x01000120; /* Output RGB888 , Event-Mode , */
+	ppi_tx_rx_ta = 0x00040004;
 
 	if (mfd->panel_info.xres == 1366) {
 		ppi_tx_rx_ta = 0x00040004;
@@ -405,22 +405,31 @@ static int mipi_d2l_dsi_init_sequence(struct msm_fb_data_type *mfd)
 		vesa_rgb888 = true;
 	}
 
-	lvcfg = 0x0101; /* PCLK=DCLK/4, Dual Link, LVEN */
-	vesa_rgb888 = true;
-	pr_err("%s.htime1=0x%x.\n", __func__, htime1);
-	pr_err("%s.vtime1=0x%x.\n", __func__, vtime1);
-	pr_err("%s.vpctrl=0x%x.\n", __func__, vpctrl);
-	pr_err("%s.lvcfg=0x%x.\n", __func__, lvcfg);
+	pr_debug("%s.htime1=0x%x.\n", __func__, htime1);
+	pr_debug("%s.vtime1=0x%x.\n", __func__, vtime1);
+	pr_debug("%s.vpctrl=0x%x.\n", __func__, vpctrl);
+	pr_debug("%s.lvcfg=0x%x.\n", __func__, lvcfg);
 
 	mipi_d2l_write_reg(mfd, SYSRST, 0xFF);
 	msleep(30);
 
-	mipi_d2l_write_reg(mfd, PPI_TX_RX_TA, 0x0008000B); /* BTA */
-	mipi_d2l_write_reg(mfd, PPI_LPTXTIMECNT, 0x00000007);
-	mipi_d2l_write_reg(mfd, PPI_D0S_CLRSIPOCOUNT, 0x00000007);
-	mipi_d2l_write_reg(mfd, PPI_D1S_CLRSIPOCOUNT, 0x00000007);
-	mipi_d2l_write_reg(mfd, PPI_D2S_CLRSIPOCOUNT, 0x00000007);
-	mipi_d2l_write_reg(mfd, PPI_D3S_CLRSIPOCOUNT, 0x00000007);
+	if (vesa_rgb888) {
+		/* VESA format instead of JEIDA format for RGB888 */
+		mipi_d2l_write_reg(mfd, LVMX0003, 0x03020100);
+		mipi_d2l_write_reg(mfd, LVMX0407, 0x08050704);
+		mipi_d2l_write_reg(mfd, LVMX0811, 0x0F0E0A09);
+		mipi_d2l_write_reg(mfd, LVMX1215, 0x100D0C0B);
+		mipi_d2l_write_reg(mfd, LVMX1619, 0x12111716);
+		mipi_d2l_write_reg(mfd, LVMX2023, 0x1B151413);
+		mipi_d2l_write_reg(mfd, LVMX2427, 0x061A1918);
+	}
+
+	mipi_d2l_write_reg(mfd, PPI_TX_RX_TA, ppi_tx_rx_ta); /* BTA */
+	mipi_d2l_write_reg(mfd, PPI_LPTXTIMECNT, 0x00000004);
+	mipi_d2l_write_reg(mfd, PPI_D0S_CLRSIPOCOUNT, 0x00000003);
+	mipi_d2l_write_reg(mfd, PPI_D1S_CLRSIPOCOUNT, 0x00000003);
+	mipi_d2l_write_reg(mfd, PPI_D2S_CLRSIPOCOUNT, 0x00000003);
+	mipi_d2l_write_reg(mfd, PPI_D3S_CLRSIPOCOUNT, 0x00000003);
 	mipi_d2l_write_reg(mfd, PPI_LANEENABLE, lanes_enable);
 	mipi_d2l_write_reg(mfd, DSI_LANEENABLE, lanes_enable);
 	mipi_d2l_write_reg(mfd, PPI_STARTPPI, 0x00000001);
@@ -432,22 +441,6 @@ static int mipi_d2l_dsi_init_sequence(struct msm_fb_data_type *mfd)
 	mipi_d2l_write_reg(mfd, HTIM2, htime2);
 	mipi_d2l_write_reg(mfd, VTIM2, vtime2);
 	mipi_d2l_write_reg(mfd, VFUEN, 0x00000001);
-	mipi_d2l_write_reg(mfd, LVPHY0, 0x00448006);
-	udelay(200);
-	mipi_d2l_write_reg(mfd, LVPHY0, 0x00048006);
-	mipi_d2l_write_reg(mfd, SYSRST, 0x4);
-
-	if (vesa_rgb888) {
-		/* VESA format instead of JEIDA format for RGB888 */
-		mipi_d2l_write_reg(mfd, LVMX0003, 0x05040302);
-		mipi_d2l_write_reg(mfd, LVMX0407, 0x0A070706);
-		mipi_d2l_write_reg(mfd, LVMX0811, 0x0F0E0C0B);
-		mipi_d2l_write_reg(mfd, LVMX1215, 0x120F0E0D);
-		mipi_d2l_write_reg(mfd, LVMX1619, 0x14131716);
-		mipi_d2l_write_reg(mfd, LVMX2023, 0x1B171615);
-		mipi_d2l_write_reg(mfd, LVMX2427, 0x061A1918);
-	}
-
 	mipi_d2l_write_reg(mfd, LVCFG, lvcfg); /* Enables LVDS tx */
 
 	return 0;
@@ -465,7 +458,7 @@ static int mipi_d2l_set_backlight_level(struct pwm_device *pwm, int level)
 {
 	int ret = 0;
 
-	pr_err("%s: level=%d.\n", __func__, level);
+	pr_debug("%s: level=%d.\n", __func__, level);
 
 	if ((pwm == NULL) || (level > PWM_LEVEL) || (level < 0)) {
 		pr_err("%s.pwm=NULL.\n", __func__);
@@ -500,7 +493,7 @@ static int mipi_d2l_set_tn_clk(struct pwm_device *pwm, u32 usec)
 {
 	int ret = 0;
 
-	pr_err("%s: usec=%d.\n", __func__, usec);
+	pr_debug("%s: usec=%d.\n", __func__, usec);
 
 	ret = pwm_config(pwm, usec/2 , usec);
 	if (ret) {
@@ -559,7 +552,11 @@ static int mipi_d2l_lcd_on(struct platform_device *pdev)
 	if (ret)
 		return ret;
 
-	d2l_pwm_freq_hz = (1500);
+	mipi_d2l_write_reg(mfd, GPIOC, d2l_gpio_out_mask);
+	/* Set gpio#4=U/D=0, gpio#3=L/R=1 , gpio#2,1=CABC=0, gpio#0=NA. */
+	mipi_d2l_write_reg(mfd, GPIOO, d2l_gpio_out_val);
+
+	d2l_pwm_freq_hz = (3.921*1000);
 
 	if (bl_level == 0)
 		bl_level = PWM_LEVEL * 2 / 3 ; /* Default ON value */
@@ -617,7 +614,7 @@ static void mipi_d2l_set_backlight(struct msm_fb_data_type *mfd)
 {
 	int level = mfd->bl_level;
 
-	pr_err("%s.lvl=%d.\n", __func__, level);
+	pr_debug("%s.lvl=%d.\n", __func__, level);
 
 	mipi_d2l_set_backlight_level(bl_pwm, level);
 
@@ -649,7 +646,7 @@ static u32 d2l_i2c_read_reg(struct i2c_client *client, u16 reg)
 
 	if (rc >= 0) {
 		val = buf[0] + (buf[1] << 8) + (buf[2] << 16) + (buf[3] << 24);
-		pr_err("%s.reg=0x%x.val=0x%x.\n", __func__, reg, val);
+		pr_debug("%s.reg=0x%x.val=0x%x.\n", __func__, reg, val);
 	} else
 		pr_err("%s.fail.reg=0x%x.\n", __func__, reg);
 
@@ -677,7 +674,7 @@ static u32 d2l_i2c_write_reg(struct i2c_client *client, u16 reg, u32 val)
 	rc = i2c_master_send(client, buf, sizeof(buf));
 
 	if (rc >= 0)
-		pr_err("%s.reg=0x%x.val=0x%x.\n", __func__, reg, val);
+		pr_debug("%s.reg=0x%x.val=0x%x.\n", __func__, reg, val);
 	else
 		pr_err("%s.fail.reg=0x%x.\n", __func__, reg);
 
@@ -695,7 +692,7 @@ static int __devinit d2l_i2c_slave_probe(struct i2c_client *client,
 		pr_err("%s.i2c_check_functionality failed.\n", __func__);
 		return -ENOSYS;
 	} else {
-		pr_err("%s.i2c_check_functionality OK.\n", __func__);
+		pr_debug("%s.i2c_check_functionality OK.\n", __func__);
 	}
 
 	d2l_i2c_read_reg(client, IDREG);
@@ -732,7 +729,7 @@ static int mipi_d2l_enable_3d(struct msm_fb_data_type *mfd,
 {
 	u32 tn_usec = 1000000 / 66; /* 66 HZ */
 
-	pr_err("%s.enable=%d.mode=%d.\n", __func__, enable, mode);
+	pr_debug("%s.enable=%d.mode=%d.\n", __func__, enable, mode);
 
 	gpio_direction_output(d2l_3d_gpio_enable, enable);
 	gpio_direction_output(d2l_3d_gpio_mode, mode);
@@ -787,8 +784,8 @@ static int mipi_dsi_3d_barrier_sysfs_register(struct device *dev)
 {
 	int ret;
 
-	pr_err("%s.d2l_3d_gpio_enable=%d.\n", __func__, d2l_3d_gpio_enable);
-	pr_err("%s.d2l_3d_gpio_mode=%d.\n", __func__, d2l_3d_gpio_mode);
+	pr_debug("%s.d2l_3d_gpio_enable=%d.\n", __func__, d2l_3d_gpio_enable);
+	pr_debug("%s.d2l_3d_gpio_mode=%d.\n", __func__, d2l_3d_gpio_mode);
 
 	ret  = device_create_file(dev, mipi_d2l_3d_barrier_attributes);
 	if (ret) {
@@ -821,7 +818,6 @@ err_device_create_file:
 	return ret;
 }
 
-
 /**
  * Probe for device.
  *
@@ -839,7 +835,7 @@ static int __devinit mipi_d2l_probe(struct platform_device *pdev)
 	int ret = 0;
 	struct msm_panel_info *pinfo = NULL;
 
-	pr_err("%s.id=%d.\n", __func__, pdev->id);
+	pr_debug("%s.id=%d.\n", __func__, pdev->id);
 
 	if (pdev->id == 0) {
 		d2l_common_pdata = pdev->dev.platform_data;
@@ -875,7 +871,7 @@ static int __devinit mipi_d2l_probe(struct platform_device *pdev)
 			bl_pwm = NULL;
 			return -EIO;
 		} else {
-			pr_err("%s.pwm_request() ok.pwm-id=%d.\n",
+			pr_debug("%s.pwm_request() ok.pwm-id=%d.\n",
 			       __func__, led_pwm);
 
 		}
@@ -890,7 +886,7 @@ static int __devinit mipi_d2l_probe(struct platform_device *pdev)
 		tn_pwm = NULL;
 		return -EIO;
 	} else {
-		pr_err("%s.pwm_request() ok.pwm-id=%d.\n", __func__, 1);
+		pr_debug("%s.pwm_request() ok.pwm-id=%d.\n", __func__, 1);
 
 	}
 
@@ -923,7 +919,7 @@ static int __devinit mipi_d2l_probe(struct platform_device *pdev)
 static int __devexit mipi_d2l_remove(struct platform_device *pdev)
 {
 	/* Note: There are no APIs to remove fb device and free DSI buf. */
-	pr_err("%s.\n", __func__);
+	pr_debug("%s.\n", __func__);
 
 	if (bl_pwm) {
 		pwm_free(bl_pwm);
@@ -950,7 +946,7 @@ int mipi_tc358764_dsi2lvds_register(struct msm_panel_info *pinfo,
 	/* Use DSI-to-LVDS bridge */
 	const char driver_name[] = "mipi_tc358764";
 
-	pr_err("%s.\n", __func__);
+	pr_debug("%s.\n", __func__);
 	ret = mipi_d2l_init();
 	if (ret) {
 		pr_err("mipi_d2l_init() failed with ret %u\n", ret);
@@ -992,7 +988,7 @@ static struct platform_driver d2l_driver = {
  */
 static int mipi_d2l_init(void)
 {
-	pr_err("%s.\n", __func__);
+	pr_debug("%s.\n", __func__);
 
 	d2l_i2c_client = NULL;
 
