@@ -1592,6 +1592,10 @@ static int get_prop_batt_capacity(struct pm8921_chg_chip *chip)
 {
 	int percent_soc;
 
+#ifdef CONFIG_CHARGER_SMB347
+	return battery_capacity;
+#endif
+
 	if (chip->battery_less_hardware)
 		return 100;
 
@@ -1802,11 +1806,11 @@ static int pm_batt_power_get_property(struct power_supply *psy,
 			val->intval = value;
 		break;
 	case POWER_SUPPLY_PROP_TEMP:
-		/*  Keep batt temp on 30 degree to avoid auto shutdown issue, this is a temporary wordaround. 
-		    batt temp will read from battery gauge for this project in the feature. 
-		*/
-		//val->intval = get_prop_batt_temp(chip);
-		val->intval = 300;
+		#ifndef CONFIG_CHARGER_SMB347
+		val->intval = get_prop_batt_temp(chip);
+		#else
+		val->intval = battery_temperature;
+		#endif
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_FULL:
 		rc = get_prop_batt_fcc(chip);
