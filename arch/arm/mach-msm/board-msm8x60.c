@@ -124,6 +124,9 @@
 #define MIPI_CMD_NOVATEK_QHD_PANEL_NAME	"mipi_cmd_novatek_qhd"
 #define MIPI_VIDEO_NOVATEK_QHD_PANEL_NAME	"mipi_video_novatek_qhd"
 #define MIPI_VIDEO_TOSHIBA_WVGA_PANEL_NAME	"mipi_video_toshiba_wvga"
+#define MIPI_CHIMEI_HJ070NA-13A	"mipi_chimei_hj070na_13a"
+#define MIPI_CHIMEI_N101ICG_L21	"mipi_chimei_n101icg_l21"
+
 #define HDMI_PANEL_NAME	"hdmi_msm"
 #define TVOUT_PANEL_NAME	"tvout_msm"
 
@@ -2726,6 +2729,18 @@ static void set_mdp_clocks_for_wuxga(void);
 
 static int msm_fb_detect_panel(const char *name)
 {
+	if (machine_is_msm8x30_type1()) {
+		if (!strncmp(name, MIPI_CHIMEI_HJ070NA-13A,
+				strnlen(MIPI_CHIMEI_HJ070NA-13A,
+					PANEL_NAME_MAX_LEN)))
+			return 0;
+	}
+	if (machine_is_msm8x30_type2()) {
+		if (!strncmp(name, MIPI_CHIMEI_N101ICG_L21,
+				strnlen(MIPI_CHIMEI_N101ICG_L21,
+					PANEL_NAME_MAX_LEN)))
+			return 0;
+	}
 	if (machine_is_msm8x60_fluid()) {
 		uint32_t soc_platform_version = socinfo_get_platform_version();
 		if (SOCINFO_VERSION_MAJOR(soc_platform_version) < 3) {
