@@ -209,12 +209,6 @@ static int mipi_dsi_cdp_panel_power(int on)
 			gpio_free(DISP_RST_GPIO);
 			return -ENODEV;
 		}
-		rc = gpio_direction_output(DISP_RST_GPIO, 0);
-		if (rc) {
-			pr_err("gpio_direction_output failed for %d gpio rc=%d\n",
-			DISP_RST_GPIO, rc);
-			return -ENODEV;
-		}
 		rc = gpio_request(DSI_LVDS_PWR_GPIO, "dsi_lvds_pwr");
 		if (rc) {
 			pr_err("request gpio (DSI_LVDS_PWR_GPIO failed, rc=%d\n",
