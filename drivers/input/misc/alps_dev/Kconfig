@@ -1,0 +1,34 @@
+menuconfig: ALPS_INPUT
+	tristate "ALPS SENSOR DAEMON"
+	depends on I2C
+
+if ALPS_INPUT
+config ALPS_INPUT_HSCDTD004A
+	tristate "HSCDTD004A magnetic field sensor support"
+	depends on I2C=y
+	help
+	  If you say yes here you get HSCDTD004A magnetic field sensor support for
+	  ALPS daemon.
+
+config ALPS_INPUT_HSCDTD007A
+	tristate "HSCDTD007A magnetic field sensor support"
+	depends on I2C=y
+	help
+	  If you say yes here you get HSCDTD007A magnetic field sensor support for
+	  ALPS daemon.
+
+config ALPS_INPUT_BMA150
+	tristate "BMA150 acceleration sensor support"
+	depends on I2C=y
+	help
+	  If you say yes here you get BMA150 acceleration sensor support for
+	  ALPS daemon.
+
+config ALPS_INPUT_BMA222
+	tristate "BMA222 acceleration sensor support"
+	depends on I2C=y
+	help
+	  If you say yes here you get BMA222 acceleration sensor support for
+	  ALPS daemon.
+
+endif
