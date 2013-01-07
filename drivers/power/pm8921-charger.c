@@ -1374,7 +1374,9 @@ static int pm_power_get_property_mains(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_PRESENT:
 	case POWER_SUPPLY_PROP_ONLINE:
 		val->intval = 0;
-
+#ifdef CONFIG_CHARGER_SMB347
+		return 0;
+#endif
 		if (the_chip->has_dc_supply) {
 			val->intval = 1;
 			return 0;
@@ -1483,6 +1485,18 @@ static int pm_power_get_property_usb(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_PRESENT:
 	case POWER_SUPPLY_PROP_ONLINE:
 		val->intval = 0;
+#ifdef CONFIG_CHARGER_SMB347
+		return 0;
+#endif
+		if (charging_disabled)
+			return 0;
+
+		/*
+		 * if drawing any current from usb is disabled behave
+		 * as if no usb cable is connected
+		 */
+		if (pm_is_chg_charge_dis(the_chip))
+			return 0;
 
 		if (the_chip->usb_psy.type == POWER_SUPPLY_TYPE_USB)
 			val->intval = is_usb_chg_plugged_in(the_chip);
@@ -1592,7 +1606,7 @@ static int get_prop_batt_capacity(struct pm8921_chg_chip *chip)
 {
 	int percent_soc;
 
-#ifdef CONFIG_CHARGER_SMB347
+#ifdef CONFIG_BATTERY_BQ27541
 	return battery_capacity;
 #endif
 
@@ -1806,7 +1820,7 @@ static int pm_batt_power_get_property(struct power_supply *psy,
 			val->intval = value;
 		break;
 	case POWER_SUPPLY_PROP_TEMP:
-		#ifndef CONFIG_CHARGER_SMB347
+		#ifndef CONFIG_BATTERY_BQ27541
 		val->intval = get_prop_batt_temp(chip);
 		#else
 		val->intval = battery_temperature;
