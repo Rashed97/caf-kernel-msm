@@ -17,6 +17,10 @@
 #include <linux/types.h>
 #include <linux/power_supply.h>
 
+#define IDEV_CHG_MAX	1500
+#define IDEV_CHG_MIN	500
+#define IUNIT		100
+
 extern int pm8921_is_usb_chg_plugged_in(void);
 //extern int pm8921_is_dc_chg_plugged_in(void);
 
@@ -25,6 +29,12 @@ extern int battery_capacity;
 extern int battery_temperature;
 
 void smb347_charger_vbus_draw(unsigned int mA);
+
+enum {
+	POWER_SUPPLY_CHARGER_REMOVE = 0,
+	POWER_SUPPLY_CHARGER_USB,
+	POWER_SUPPLY_CHARGER_AC,
+};
 
 enum {
 	/* use the default compensation method */

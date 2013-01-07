@@ -234,14 +234,30 @@ static int smb347_write(struct smb347_charger *smb, u8 reg, u8 val)
 	return ret;
 }
 
-static int ac_flags;
+static int charger_type_flags;
 /* USB calls these to tell us how much max usb current the system can draw */
 void smb347_charger_vbus_draw(unsigned int mA)
 {
 	pr_debug("Enter charge=%d\n", mA);
-	ac_flags=1;
+
+	if (mA == IDEV_CHG_MIN)
+		charger_type_flags = POWER_SUPPLY_CHARGER_USB;
+	else if (mA == IDEV_CHG_MAX)
+		charger_type_flags = POWER_SUPPLY_CHARGER_AC;
+	else
+		charger_type_flags = POWER_SUPPLY_CHARGER_REMOVE;
 }
 EXPORT_SYMBOL_GPL(smb347_charger_vbus_draw);
+
+void power_supply_update(struct smb347_charger *smb)
+{
+	printk("%s smb->mains_online=%d smb->usb_online=%d\n", __FUNCTION__, smb->mains_online, smb->usb_online);
+
+	if (smb->mains_online)
+		power_supply_changed(&smb->mains);
+	else if(smb->usb_online)
+		power_supply_changed(&smb->usb);
+}
 
 void update_charger_type(struct smb347_charger *smb)
 {
@@ -278,7 +294,6 @@ void update_charger_type(struct smb347_charger *smb)
 	smb347_write(smb, CMD_B, cmd_ret);
 }
 
-
 /**
  * smb347_update_status - updates the charging status
  * @smb: pointer to smb347 charger instance
@@ -289,8 +304,9 @@ void update_charger_type(struct smb347_charger *smb)
  */
 static int smb347_update_status(struct smb347_charger *smb)
 {
-	bool usb = false;
-	bool dc = false;
+	bool charge	= false;
+	bool usb	= false;
+	bool dc		= false;
 	int ret;
 
 	ret = smb347_read(smb, IRQSTAT_E);
@@ -300,22 +316,37 @@ static int smb347_update_status(struct smb347_charger *smb)
 	 * Dc and usb are set depending on whether they are enabled in
 	 * platform data _and_ whether corresponding undervoltage is set.
 	 */
+	if ((smb->pdata->use_usb) || (smb->pdata->use_mains))		
+		charge = pm8921_is_usb_chg_plugged_in();
 
-	//if (smb->pdata->use_mains)
-	//	dc  = pm8921_is_dc_chg_plugged_in();
-	if (smb->pdata->use_usb)
-		usb = pm8921_is_usb_chg_plugged_in();
+	if ((charger_type_flags == POWER_SUPPLY_CHARGER_AC) && charge)
+	{
+		dc  = 1;
+		usb = 0;
+	}
+	else if ((charger_type_flags == POWER_SUPPLY_CHARGER_USB) && charge)
+	{
+		dc  = 0;
+		usb = 1;
+	}
+	else if (!charge) {
+		dc  = 0;
+		usb = 0;
+	}
+
+	pr_debug("%s dc=%d usb=%d charge=%d charger_type=%d\n", __FUNCTION__, dc,
+		usb, charge, charger_type_flags);
 
 	mutex_lock(&smb->lock);
 
 	ret = smb->mains_online != dc || smb->usb_online != usb;
-	//smb->mains_online = dc;
+	smb->mains_online = dc;
 	smb->usb_online = usb;
-	if (!usb) 
-		ac_flags=0;
-	smb->mains_online =ac_flags;
 
 	update_charger_type(smb);
+
+	if (ret > 0)
+		power_supply_update(smb);
 
 	mutex_unlock(&smb->lock);
 
@@ -868,8 +899,10 @@ static irqreturn_t smb347_interrupt(int irq, void *data)
 	if (irqstat_e & (IRQSTAT_E_USBIN_UV_IRQ | IRQSTAT_E_DCIN_UV_IRQ)) {
 		if (smb347_update_status(smb) > 0) {
 			smb347_update_online(smb);
-			power_supply_changed(&smb->mains);
-			power_supply_changed(&smb->usb);
+			if (smb->mains_online)
+				power_supply_changed(&smb->mains);
+			else if(smb->usb_online)
+				power_supply_changed(&smb->usb);
 		}
 		ret = IRQ_HANDLED;
 	}
@@ -1159,6 +1192,8 @@ static int smb347_debugfs_show(struct seq_file *s, void *data)
 	int ret;
 	u8 reg;
 
+	power_supply_changed(&smb->mains);
+
 	seq_printf(s, "Control registers:\n");
 	seq_printf(s, "==================\n");
 	for (reg = CFG_CHARGE_CURRENT; reg <= CFG_ADDRESS; reg++) {
@@ -1268,7 +1303,6 @@ static int smb347_probe(struct i2c_client *client,
 
 	ret = power_supply_register(dev, &smb->usb);
 	if (ret < 0) {
-		power_supply_unregister(&smb->mains);
 		return ret;
 	}
 
