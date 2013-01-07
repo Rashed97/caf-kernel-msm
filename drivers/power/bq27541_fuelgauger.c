@@ -498,7 +498,7 @@ static struct platform_device this_device = {
 };
 #endif
 
-#define	BATT_POLLING_TIME		(15 * HZ)
+#define	BATT_POLLING_TIME		(10 * HZ)
 
 int battery_mvolts;
 int battery_capacity;
@@ -513,6 +513,9 @@ static void msm_battery_update_psy_status(void)
 	udelay(100);
 	battery_temperature = bq27541_get_battery_temperature();
 	udelay(100);
+
+	printk("%s mvolts=%d capacity=%d temperature=%d\n", __FUNCTION__,
+		battery_mvolts, battery_capacity, battery_temperature);
 
 	queue_delayed_work(bq27541_di->battery_queue, &(bq27541_di->battery_work), BATT_POLLING_TIME);
 }
