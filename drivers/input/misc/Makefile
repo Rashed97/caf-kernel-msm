@@ -64,3 +64,4 @@ obj-$(CONFIG_BOSCH_BMA2X2)	+= bma2x2.o
 obj-$(CONFIG_STM_LIS3DH)		+= lis3dh_acc.o
 obj-$(CONFIG_ALPS_HSCDTD007A)		+= hscdtd007a_i2c.o
 obj-$(CONFIG_AL3010)			+= al3010.o
+obj-y                          += alps_dev/

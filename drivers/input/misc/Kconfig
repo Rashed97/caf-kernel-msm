@@ -675,4 +675,6 @@ config STM_LIS3DH
           If you say yes here you get support for STMicroelectronics's
           acceleration sensors LIS3DH.
 
+source "drivers/input/misc/alps_dev/Kconfig"
+
 endif
