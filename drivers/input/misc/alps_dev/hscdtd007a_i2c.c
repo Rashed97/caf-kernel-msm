@@ -32,7 +32,7 @@
 #define I2C_RETRIES      5
 
 #define I2C_HSCD_ADDR    (0x0c)    /* 000 1100    */
-#define I2C_BUS_NUMBER   4
+#define I2C_BUS_NUMBER   12
 
 #define HSCD_DRIVER_NAME "hscd_i2c"
 

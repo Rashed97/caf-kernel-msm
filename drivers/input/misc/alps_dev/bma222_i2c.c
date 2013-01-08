@@ -42,8 +42,8 @@
 #define ACC_REG14          0x14
 
 #define ACC_DRIVER_NAME    "bma222"
-#define I2C_ACC_ADDR       (0x08)        /* 000 1000    */
-#define I2C_BUS_NUMBER     4
+#define I2C_ACC_ADDR       (0x18)        /* 001 1000    */
+#define I2C_BUS_NUMBER     12
 
 #ifdef ACC_DEBUG
 #define ALPS_ACC_DEBUG
