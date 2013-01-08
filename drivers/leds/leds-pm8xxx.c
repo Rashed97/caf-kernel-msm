@@ -433,7 +433,7 @@ static int pm8xxx_led_pwm_work(struct pm8xxx_led_singular_data *led)
 			pwm_disable(led->pwm_dev);
 		}
 	} else {
-		rc = pm8xxx_pwm_lut_enable(led->pwm_dev, 0);
+		pwm_disable(led->pwm_dev);
 		if (led->cdev.brightness) {
 			for (i = 0; i < led->pwm_duty_cycles->num_duty_pcts; i++) {
 				led->duty_pcts[i] = led->pwm_duty_cycles->duty_pcts[i] * led->cdev.brightness / LED_FULL;
