@@ -1192,8 +1192,6 @@ static int smb347_debugfs_show(struct seq_file *s, void *data)
 	int ret;
 	u8 reg;
 
-	power_supply_changed(&smb->mains);
-
 	seq_printf(s, "Control registers:\n");
 	seq_printf(s, "==================\n");
 	for (reg = CFG_CHARGE_CURRENT; reg <= CFG_ADDRESS; reg++) {
