@@ -3401,7 +3401,7 @@ static void __init msm8930_cdp_init(void)
 	if (PLATFORM_IS_CHARM25())
 		platform_add_devices(mdm_devices, ARRAY_SIZE(mdm_devices));
 
-	pr_err( "#@#@#@#@#  tb_hw_platform = %d  #@#@#@#@#", tb_hw_platform());
+	pr_err( "#@#@#@#@# qrd_tablet_hw_platform = %d  #@#@#@#@#", qrd_tablet_hw_platform());
 
 }
 
