@@ -280,7 +280,7 @@ static int al3010_get_power_state(struct i2c_client *client)
 static int al3010_get_adc_value(struct i2c_client *client)
 {
 	struct al3010_data *data = i2c_get_clientdata(client);
-	int lsb, msb, range, val;
+	int lsb, msb, val;
 
 	mutex_lock(&data->lock);
 	lsb = i2c_smbus_read_byte_data(client, AL3010_ADC_LSB);
@@ -296,11 +296,9 @@ static int al3010_get_adc_value(struct i2c_client *client)
 	if (msb < 0)
 		return msb;
 
-	range = al3010_get_range(client);
-	val = (((msb << 8) | lsb) * range) >> 16;
-	val *= cali;
+	val = (msb << 8) | lsb;
 
-	return (val / 100);
+	return val;
 }
 
 /*
