@@ -134,7 +134,7 @@ static struct msm_gpiomux_config msm8930_cam_common_configs[] = {
 	{
 		.gpio = 76,
 		.settings = {
-			[GPIOMUX_ACTIVE]    = &cam_settings[2],
+			[GPIOMUX_ACTIVE]    = &cam_settings[0],
 			[GPIOMUX_SUSPENDED] = &cam_settings[0],
 		},
 	},
@@ -152,6 +152,14 @@ static struct msm_gpiomux_config msm8930_cam_common_configs[] = {
 			[GPIOMUX_SUSPENDED] = &cam_settings[0],
 		},
 	},
+	{
+		.gpio = 75,
+		.settings = {
+			[GPIOMUX_ACTIVE]    = &cam_settings[2],
+			[GPIOMUX_SUSPENDED] = &cam_settings[0],
+		},
+	},
+
 };
 
 static struct msm_gpiomux_config msm8930_cam_2d_configs[] = {
@@ -456,6 +464,7 @@ static struct gpio msm8930_common_cam_gpio[] = {
 
 static struct gpio msm8930_front_cam_gpio[] = {
 	{4, GPIOF_DIR_IN, "CAMIF_MCLK"},
+	{75, GPIOF_DIR_OUT, "CAM_STYBY_N"},
 	{76, GPIOF_DIR_OUT, "CAM_RESET"},
 };
 
@@ -466,6 +475,8 @@ static struct gpio msm8930_back_cam_gpio[] = {
 };
 
 static struct msm_gpio_set_tbl msm8930_front_cam_gpio_set_tbl[] = {
+	{75, GPIOF_OUT_INIT_LOW, 1000},
+	{75, GPIOF_OUT_INIT_HIGH, 4000},
 	{76, GPIOF_OUT_INIT_LOW, 1000},
 	{76, GPIOF_OUT_INIT_HIGH, 4000},
 };
@@ -672,6 +683,36 @@ static struct msm_camera_sensor_info msm_camera_sensor_ov5647_data = {
 	.actuator_info    = &msm_act_main_cam_2_info,
 };
 //
+//
+static struct msm_camera_sensor_flash_data flash_gc0339= {
+	.flash_type = MSM_CAMERA_FLASH_NONE,
+};
+
+static struct msm_camera_csi_lane_params gc0339_csi_lane_params = {
+	.csi_lane_assign = 0xE4,
+	.csi_lane_mask = 0x1,
+};
+
+static struct msm_camera_sensor_platform_info sensor_board_info_gc0339 = {
+	.mount_angle  = 90,
+	.cam_vreg = msm_8930_qrd_cam_vreg,
+	.num_vreg = ARRAY_SIZE(msm_8930_qrd_cam_vreg),
+	.gpio_conf = &msm_8930_front_cam_gpio_conf,
+	.csi_lane_params = &gc0339_csi_lane_params,
+};
+
+static struct msm_camera_sensor_info msm_camera_sensor_gc0339_data = {
+	.sensor_name          = "gc0339",
+	.pdata                = &msm_camera_csi_device_data[1],
+	.flash_data           = &flash_gc0339,
+	.sensor_platform_info = &sensor_board_info_gc0339,
+	.csi_if               = 1,
+	.camera_type          = FRONT_CAMERA_2D,
+	.sensor_type          = BAYER_SENSOR,
+//	.actuator_info    = &msm_act_main_cam_2_info,
+};
+//
+
 static struct platform_device msm_camera_server = {
 	.name = "msm_cam_server",
 	.id = 0,
@@ -729,6 +770,10 @@ struct i2c_board_info msm8930_camera_i2c_boardinfo[] = {
 	{
 	I2C_BOARD_INFO("ov5647", 0x36),
 	.platform_data = &msm_camera_sensor_ov5647_data,
+	},
+	{
+	I2C_BOARD_INFO("gc0339", 0x21),
+	.platform_data = &msm_camera_sensor_gc0339_data,
 	},
 //
 	{
