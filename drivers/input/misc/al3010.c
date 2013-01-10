@@ -48,7 +48,6 @@
 
 
 #define AL3010_DRV_NAME	"al3010"
-//#define AL3010_DRV_NAME		"dyna"
 #define DRIVER_VERSION		"1.9"
 
 #define AL3010_NUM_CACHABLE_REGS	9
@@ -882,8 +881,7 @@ static int al3010_resume(struct i2c_client *client)
 
 static const struct i2c_device_id al3010_id[] = {
 	{ "al3010", 0 },
-	//{ "dyna", 0 },
-	//{}
+	{ }
 };
 MODULE_DEVICE_TABLE(i2c, al3010_id);
 
