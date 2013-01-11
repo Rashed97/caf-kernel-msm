@@ -200,6 +200,10 @@ static u32 d2l_pwm_freq_hz = (1 * 1000);
 #define KHZ 1000
 #define MHZ (1000*1000)
 
+#ifdef CONFIG_CHARGER_SMB347
+extern bool power_off_charging;
+#endif
+
 /**
  * Command payload for DTYPE_GEN_LWRITE (0x29) / DTYPE_GEN_READ2 (0x24).
  */
@@ -345,6 +349,11 @@ static int mipi_d2l_dsi_init_sequence(struct msm_fb_data_type *mfd)
 	u32 vfpr;	/* Vertical Front Porch */
 	u32 vsize;	/* Vertical Active size */
 	bool vesa_rgb888 = false;
+
+#ifdef CONFIG_CHARGER_SMB347
+if (power_off_charging)
+	return 0;
+#endif
 
 	lanes_enable = 0x01; /* clock-lane enable */
 	lanes_enable |= (mipi->data_lane0 << 1);
@@ -528,6 +537,11 @@ static int mipi_d2l_dsi_init_sequence(struct msm_fb_data_type *mfd)
 static int mipi_d2l_set_backlight_level(struct pwm_device *pwm, int level)
 {
 	int ret = 0;
+
+#ifdef CONFIG_CHARGER_SMB347
+if (power_off_charging)
+	level = 0;
+#endif
 
 	pr_debug("%s: level=%d.\n", __func__, level);
 
