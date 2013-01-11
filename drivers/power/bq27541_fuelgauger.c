@@ -542,7 +542,7 @@ static void msm_battery_update_psy_status(void)
 	udelay(100);
 
 	printk("%s mvolts=%d capacity=%d temperature=%d charge_current=%d\n", __FUNCTION__,
-		battery_mvolts, battery_capacity, battery_temperature, charge_current);
+		(int) battery_mvolts, (int) battery_capacity, (int) battery_temperature, (int) charge_current);
 
 	queue_delayed_work(bq27541_di->battery_queue, &(bq27541_di->battery_work), BATT_POLLING_TIME);
 }
