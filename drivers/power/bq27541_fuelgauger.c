@@ -156,6 +156,25 @@ static int bq27541_battery_capacity(struct bq27541_device_info *di)
 	return cap;
 }
 
+
+/*
+ * Return the battery charging current
+ * Or < 0 if something fails.
+ */
+static int bq27541_battery_current(struct bq27541_device_info *di)
+{
+	int ret;
+	int battcurrent = 0;
+
+	ret = bq27541_read(BQ27541_REG_AI, &battcurrent, 0, di);
+	if (ret) {
+		dev_err(di->dev, "error reading current\n");
+		return ret;
+	}
+
+	return battcurrent;
+}
+
 /*
  * Return the battery temperature in tenths of degree Celsius
  * Or < 0 if something fails.
@@ -305,6 +324,11 @@ static int bq27541_get_battery_mvolts(void)
 static int bq27541_get_battery_capacity(void)
 {
 	return bq27541_battery_capacity(bq27541_di);
+}
+
+static int bq27541_get_battery_current(void)
+{
+	return bq27541_battery_current(bq27541_di);
 }
 
 static int bq27541_get_battery_temperature(void)
@@ -503,6 +527,7 @@ static struct platform_device this_device = {
 int battery_mvolts;
 int battery_capacity;
 int battery_temperature;
+int charge_current;
 
 static void msm_battery_update_psy_status(void)
 {
@@ -513,9 +538,11 @@ static void msm_battery_update_psy_status(void)
 	udelay(100);
 	battery_temperature = bq27541_get_battery_temperature();
 	udelay(100);
+	charge_current = bq27541_get_battery_current();
+	udelay(100);
 
-	printk("%s mvolts=%d capacity=%d temperature=%d\n", __FUNCTION__,
-		battery_mvolts, battery_capacity, battery_temperature);
+	printk("%s mvolts=%d capacity=%d temperature=%d charge_current=%d\n", __FUNCTION__,
+		battery_mvolts, battery_capacity, battery_temperature, charge_current);
 
 	queue_delayed_work(bq27541_di->battery_queue, &(bq27541_di->battery_work), BATT_POLLING_TIME);
 }
