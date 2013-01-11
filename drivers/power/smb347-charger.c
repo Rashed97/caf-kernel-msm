@@ -332,6 +332,8 @@ static int smb347_update_status(struct smb347_charger *smb)
 	else if (!charge) {
 		dc  = 0;
 		usb = 0;
+		if (power_off_charging) 
+			pm_power_off();
 	}
 
 	pr_debug("%s dc=%d usb=%d charge=%d charger_type=%d\n", __FUNCTION__, dc,
@@ -1325,6 +1327,7 @@ static int smb347_probe(struct i2c_client *client,
 
 	smb->dentry = debugfs_create_file("smb347-regs", S_IRUSR, NULL, smb,
 					  &smb347_debugfs_fops);
+
 	return 0;
 }
 

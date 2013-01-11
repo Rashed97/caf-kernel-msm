@@ -3287,6 +3287,30 @@ static void __init msm8930_pm8917_pdata_fixup(void)
 	pdata->uses_pm8917 = true;
 }
 
+#ifdef CONFIG_CHARGER_SMB347
+#define PWR_ON_EVENT_USB_CHG   0x20
+bool power_off_charging = 0;
+extern int pm8921_is_usb_chg_plugged_in(void);
+#endif
+
+static void check_power_on_reason(void)
+{
+	unsigned int boot_reason;
+	unsigned smem_size;
+
+	boot_reason = *(unsigned int *)
+		(smem_get_entry(SMEM_POWER_ON_STATUS_INFO, &smem_size));
+
+	#ifdef CONFIG_CHARGER_SMB347
+	if ((boot_reason == PWR_ON_EVENT_USB_CHG) && (pm8921_is_usb_chg_plugged_in()))
+		power_off_charging = 1;
+
+	printk("%s, power_off_charging = %d\n", __FUNCTION__, power_off_charging);
+	#endif
+
+	printk("Boot Reason = 0x%02x\n", boot_reason);
+}
+
 static void __init msm8930_cdp_init(void)
 {
 	if (socinfo_get_pmic_model() == PMIC_MODEL_PM8917)
@@ -3401,7 +3425,9 @@ static void __init msm8930_cdp_init(void)
 	if (PLATFORM_IS_CHARM25())
 		platform_add_devices(mdm_devices, ARRAY_SIZE(mdm_devices));
 
-	pr_err( "#@#@#@#@# qrd_tablet_hw_platform = %d  #@#@#@#@#", qrd_tablet_hw_platform());
+	pr_err( "#@#@#@#@#  qrd_tablet_hw_platform = %d  #@#@#@#@#", qrd_tablet_hw_platform());
+
+	check_power_on_reason();
 
 }
 

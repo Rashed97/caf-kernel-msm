@@ -27,6 +27,10 @@
 #define PON_CNTL_PULL_UP BIT(7)
 #define PON_CNTL_TRIG_DELAY_MASK (0x7)
 
+#ifdef CONFIG_CHARGER_SMB347
+extern bool power_off_charging;
+#endif
+
 /**
  * struct pmic8xxx_pwrkey - pmic8xxx pwrkey information
  * @key_press_irq: key press irq number
@@ -49,6 +53,10 @@ static irqreturn_t pwrkey_press_irq(int irq, void *_pwrkey)
 		return IRQ_HANDLED;
 	} else {
 		pwrkey->press = true;
+#ifdef CONFIG_CHARGER_SMB347
+		if (power_off_charging) 
+			pm_power_off();
+#endif
 	}
 
 	input_report_key(pwrkey->pwr, KEY_POWER, 1);
