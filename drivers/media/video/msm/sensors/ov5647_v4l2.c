@@ -745,10 +745,10 @@ static void ov5647_stop_stream(struct msm_sensor_ctrl_t *s_ctrl)
 	else
 		msleep(266);
 
-	msm_camera_i2c_write(
+/*	msm_camera_i2c_write(
 			s_ctrl->sensor_i2c_client,
 			0x4800, 0x25,
-			MSM_CAMERA_I2C_BYTE_DATA);
+			MSM_CAMERA_I2C_BYTE_DATA);*/
 }
 
 int32_t ov5647_sensor_setting(struct msm_sensor_ctrl_t *s_ctrl,
