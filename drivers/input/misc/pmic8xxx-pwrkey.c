@@ -23,6 +23,8 @@
 #include <linux/mfd/pm8xxx/core.h>
 #include <linux/input/pmic8xxx-pwrkey.h>
 
+#include <linux/reboot.h>
+
 #define PON_CNTL_1 0x1C
 #define PON_CNTL_PULL_UP BIT(7)
 #define PON_CNTL_TRIG_DELAY_MASK (0x7)
@@ -55,7 +57,7 @@ static irqreturn_t pwrkey_press_irq(int irq, void *_pwrkey)
 		pwrkey->press = true;
 #ifdef CONFIG_CHARGER_SMB347
 		if (power_off_charging) 
-			pm_power_off();
+			machine_restart("reboot");
 #endif
 	}
 
