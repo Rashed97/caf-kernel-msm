@@ -1,6 +1,7 @@
 
 #include <linux/module.h>
 #include <linux/gpio.h>
+#include <linux/input.h>
 #include <linux/interrupt.h>
 #include <linux/iqs128.h>
 #include <linux/platform_device.h>
@@ -8,6 +9,7 @@
 
 struct iqs128_data {
 	struct iqs128_platform_data *pdata;
+	struct input_dev *input;
 	struct work_struct work;
 };
 
@@ -17,9 +19,16 @@ enum {
 static int debug_mask = 0;
 module_param_named(debug_mask, debug_mask, int, S_IRUGO | S_IWUSR | S_IWGRP);
 
+static void iqs128_report_event(struct iqs128_data *iqs128_data, int value)
+{
+	input_report_abs(iqs128_data->input, ABS_DISTANCE, value);
+	input_sync(iqs128_data->input);
+}
+
 static void iqs128_work_func(struct work_struct *work)
 {
 	int i;
+	int object_detect = 0;
 	struct iqs128_data *iqs128_data =
 			container_of(work, struct iqs128_data, work);
 
@@ -29,6 +38,7 @@ static void iqs128_work_func(struct work_struct *work)
 				printk(KERN_INFO "iqs128 psensor detected"
 						"the object is approaching. gpio:%d\n",
 						iqs128_data->pdata->gpio_data[i].irq_gpio);
+			object_detect |= 1;
 		} else {
 			if (debug_mask & DEBUG_ENABLE)
 				printk(KERN_INFO "iqs128 psensor detected"
@@ -36,6 +46,8 @@ static void iqs128_work_func(struct work_struct *work)
 						iqs128_data->pdata->gpio_data[i].irq_gpio);
 		}
 	}
+
+	iqs128_report_event(iqs128_data ,object_detect);
 }
 
 static irqreturn_t iqs128_int_handler(int irq, void *dev_id)
@@ -63,6 +75,7 @@ static int __devinit iqs128_probe(struct platform_device *pdev)
 {
 	int i;
 	int error;
+	struct input_dev *dev;
 	struct iqs128_data *iqs128_data;
 	struct iqs128_platform_data *pdata = pdev->dev.platform_data;
 
@@ -77,6 +90,28 @@ static int __devinit iqs128_probe(struct platform_device *pdev)
 	iqs128_data->pdata = pdata;
 
 	platform_set_drvdata(pdev, iqs128_data);
+
+	dev = input_allocate_device();
+	if (!dev) {
+		error = -ENOMEM;
+		goto kfree;
+	}
+
+	dev->name = "capacitive p-sensor";
+
+	set_bit(EV_REL, dev->evbit);
+	input_set_capability(dev, EV_ABS, ABS_DISTANCE);
+	input_set_abs_params(dev, ABS_DISTANCE, 0, 2, 0, 0);
+
+	input_set_drvdata(dev, iqs128_data);
+
+	error = input_register_device(dev);
+	if (error < 0) {
+		input_free_device(dev);
+		goto kfree;
+	}
+
+	iqs128_data->input = dev;
 
 	for (i = 0; i < pdata->num_data; i++) {
 		if (gpio_is_valid(pdata->gpio_data[i].irq_gpio)) {
