@@ -270,6 +270,8 @@ static int __init msm_pmic_restart_init(void)
 
 late_initcall(msm_pmic_restart_init);
 
+int power_on_mode=0;
+
 static int __init msm_restart_init(void)
 {
 #ifdef CONFIG_MSM_DLOAD_MODE
@@ -281,6 +283,7 @@ static int __init msm_restart_init(void)
 	restart_reason = MSM_IMEM_BASE + RESTART_REASON_ADDR;
 	pm_power_off = msm_power_off;
 
+	power_on_mode = __raw_readl(restart_reason);
 	return 0;
 }
 early_initcall(msm_restart_init);
