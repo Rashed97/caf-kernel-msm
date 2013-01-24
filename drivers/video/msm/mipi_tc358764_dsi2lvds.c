@@ -193,7 +193,7 @@ static u32 d2l_pwm_freq_hz = (1 * 1000);
 
 #define PWM_FREQ_HZ	(d2l_pwm_freq_hz)
 #define PWM_PERIOD_USEC (USEC_PER_SEC / PWM_FREQ_HZ)
-#define PWM_DUTY_LEVEL (PWM_PERIOD_USEC / PWM_LEVEL)
+#define PWM_DUTY_LEVEL_TO_PERIOD_USEC(x) (x * PWM_PERIOD_USEC / PWM_LEVEL)
 
 #define CMD_DELAY 100
 #define DSI_MAX_LANES 4
@@ -550,7 +550,7 @@ if (power_off_charging)
 		return -EINVAL;
 	}
 
-	ret = pwm_config(pwm, PWM_DUTY_LEVEL * level, PWM_PERIOD_USEC);
+	ret = pwm_config(pwm, PWM_DUTY_LEVEL_TO_PERIOD_USEC(level), PWM_PERIOD_USEC);
 	if (ret) {
 		pr_err("%s: pwm_config() failed err=%d.\n", __func__, ret);
 		return ret;
