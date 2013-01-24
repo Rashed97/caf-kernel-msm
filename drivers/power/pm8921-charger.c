@@ -4680,7 +4680,11 @@ static int __devinit pm8921_charger_probe(struct platform_device *pdev)
 	chip->stop_chg_upon_expiry = pdata->stop_chg_upon_expiry;
 
 	chip->usb_psy.name = "usb",
+#ifdef CONFIG_CHARGER_SMB347
+	chip->usb_psy.type = POWER_SUPPLY_TYPE_UNKNOWN,
+#else
 	chip->usb_psy.type = POWER_SUPPLY_TYPE_USB,
+#endif
 	chip->usb_psy.supplied_to = pm_power_supplied_to,
 	chip->usb_psy.num_supplicants = ARRAY_SIZE(pm_power_supplied_to),
 	chip->usb_psy.properties = pm_power_props_usb,
@@ -4689,7 +4693,11 @@ static int __devinit pm8921_charger_probe(struct platform_device *pdev)
 	chip->usb_psy.set_property = pm_power_set_property_usb,
 
 	chip->dc_psy.name = "pm8921-dc",
+#ifdef CONFIG_CHARGER_SMB347
+	chip->dc_psy.type = POWER_SUPPLY_TYPE_UNKNOWN,
+#else
 	chip->dc_psy.type = POWER_SUPPLY_TYPE_MAINS,
+#endif
 	chip->dc_psy.supplied_to = pm_power_supplied_to,
 	chip->dc_psy.num_supplicants = ARRAY_SIZE(pm_power_supplied_to),
 	chip->dc_psy.properties = pm_power_props_mains,
