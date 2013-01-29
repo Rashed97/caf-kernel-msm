@@ -61,6 +61,7 @@
 #define CFG_SYSOK				0x08
 #define CFG_SYSOK_SUSPEND_HARD_LIMIT_DISABLED	BIT(2)
 #define CFG_OTHER				0x09
+#define CFG_OTHER_LOW_BATTERY			BIT(2)
 #define CFG_OTHER_RID_MASK			0xc0
 #define CFG_OTHER_RID_ENABLED_AUTO_OTG		0xc0
 #define CFG_OTG					0x0a
@@ -80,6 +81,7 @@
 #define CFG_FAULT_IRQ				0x0c
 #define CFG_FAULT_IRQ_DCIN_UV			BIT(2)
 #define CFG_STATUS_IRQ				0x0d
+#define CFG_STATUS_IRQ_LOW_BATTERY		BIT(0)
 #define CFG_STATUS_IRQ_TERMINATION_OR_TAPER	BIT(4)
 #define CFG_ADDRESS				0x0e
 
@@ -94,6 +96,9 @@
 
 /* Interrupt Status registers */
 #define IRQSTAT_A				0x35
+#define IRQSTAT_B				0x36
+#define IRQSTAT_B_LOW_BATTERY_IRQ		BIT(3)
+#define IRQSTAT_B_LOW_BATTERY_STAT		BIT(2)
 #define IRQSTAT_C				0x37
 #define IRQSTAT_C_TERMINATION_STAT		BIT(0)
 #define IRQSTAT_C_TERMINATION_IRQ		BIT(1)
@@ -801,6 +806,8 @@ static int smb347_hw_init(struct smb347_charger *smb)
 	if (smb->pdata->use_usb_otg)
 		ret |= CFG_OTHER_RID_ENABLED_AUTO_OTG;
 
+	ret &= ~CFG_OTHER_LOW_BATTERY;
+
 	ret = smb347_write(smb, CFG_OTHER, ret);
 	if (ret < 0)
 		goto fail;
@@ -849,8 +856,15 @@ fail:
 static irqreturn_t smb347_interrupt(int irq, void *data)
 {
 	struct smb347_charger *smb = data;
+	int irqstat_b;
 	int stat_c, irqstat_e, irqstat_c;
 	irqreturn_t ret = IRQ_NONE;
+
+	irqstat_b = smb347_read(smb, IRQSTAT_B);
+	if (irqstat_b < 0) {
+		dev_warn(&smb->client->dev, "reading IRQSTAT_B failed\n");
+		return IRQ_NONE;
+	}
 
 	stat_c = smb347_read(smb, STAT_C);
 	if (stat_c < 0) {
@@ -882,6 +896,16 @@ static irqreturn_t smb347_interrupt(int irq, void *data)
 
 		ret = IRQ_HANDLED;
 	}
+
+	/*
+	 * When Low battery, SMB347 will send a interrupt to wake up devices
+	 * so that devices can power down when ultra-low battery
+	 */
+	if (irqstat_b & (IRQSTAT_B_LOW_BATTERY_IRQ | IRQSTAT_B_LOW_BATTERY_STAT)) {
+		if (!pm8921_is_usb_chg_plugged_in())
+			pm_power_off();
+	}
+
 
 	/*
 	 * If we reached the termination current the battery is charged and
@@ -932,7 +956,8 @@ static int smb347_irq_set(struct smb347_charger *smb, bool enable)
 			goto fail;
 
 		ret = smb347_write(smb, CFG_STATUS_IRQ,
-				   CFG_STATUS_IRQ_TERMINATION_OR_TAPER);
+				   CFG_STATUS_IRQ_TERMINATION_OR_TAPER | 
+				   CFG_STATUS_IRQ_LOW_BATTERY);
 		if (ret < 0)
 			goto fail;
 
