@@ -22,6 +22,7 @@
 #include <linux/delay.h>
 #include <linux/mfd/pm8xxx/core.h>
 #include <linux/mfd/pm8xxx/misc.h>
+#include <linux/gpio.h>
 
 /* PON CTRL 1 register */
 #define REG_PM8XXX_PON_CTRL_1			0x01C
@@ -150,6 +151,8 @@
 #define REG_HSED_BIAS1_CNTL2		0x135
 #define REG_HSED_BIAS2_CNTL2		0x138
 #define HSED_EN_MASK			0xC0
+
+#define BACKLIGHT_EN			9
 
 struct pm8xxx_misc_chip {
 	struct list_head			link;
@@ -528,6 +531,11 @@ int pm8xxx_reset_pwr_off(int reset)
 	struct pm8xxx_misc_chip *chip;
 	unsigned long flags;
 	int rc = 0;
+
+	/* For the leakage current from Backlight IC, Turn off backlight before shutdown. */
+
+	rc = gpio_request(BACKLIGHT_EN, "POWER_OFF");
+	gpio_direction_output(BACKLIGHT_EN, 0);
 
 	spin_lock_irqsave(&pm8xxx_misc_chips_lock, flags);
 
