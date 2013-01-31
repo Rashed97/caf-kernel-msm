@@ -326,6 +326,9 @@ static int smb347_update_status(struct smb347_charger *smb)
 	if ((smb->pdata->use_usb) || (smb->pdata->use_mains))		
 		charge = pm8921_is_usb_chg_plugged_in();
 
+        if (charge == -EINVAL)
+               charge = 0;
+
 	if ((charger_type_flags == POWER_SUPPLY_CHARGER_AC) && charge)
 	{
 		dc  = 1;
@@ -346,14 +349,17 @@ static int smb347_update_status(struct smb347_charger *smb)
 
 	mutex_lock(&smb->lock);
 
-	ret = smb->mains_online != dc || smb->usb_online != usb;
-	smb->mains_online = dc;
-	smb->usb_online = usb;
+        if (smb->usb_online != usb) {
+                smb->usb_online = usb;
+                power_supply_changed(&smb->usb);
+        }
+
+        if (smb->mains_online != dc) {
+                smb->mains_online = dc;
+                power_supply_changed(&smb->mains);
+        }
 
 	update_charger_type(smb);
-
-	if (ret > 0)
-		power_supply_update(smb);
 
 	mutex_unlock(&smb->lock);
 
