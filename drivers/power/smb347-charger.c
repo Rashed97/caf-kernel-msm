@@ -201,6 +201,8 @@ static const unsigned int ccc_tbl[] = {
 	1200000,
 };
 
+struct smb347_charger *the_chip;
+
 /* Convert register value to current using lookup table */
 static int hw_to_current(const unsigned int *tbl, size_t size, unsigned int val)
 {
@@ -337,8 +339,6 @@ static int smb347_update_status(struct smb347_charger *smb)
 	else if (!charge) {
 		dc  = 0;
 		usb = 0;
-		if (power_off_charging) 
-			pm_power_off();
 	}
 
 	pr_debug("%s dc=%d usb=%d charge=%d charger_type=%d\n", __FUNCTION__, dc,
@@ -1264,8 +1264,48 @@ static const struct file_operations smb347_debugfs_fops = {
 	.open		= smb347_debugfs_open,
 	.read		= seq_read,
 	.llseek		= seq_lseek,
-	.release	= single_release,
+	.release        = single_release,
 };
+
+static int smb347_enable_set(void *data, u64 val)
+{
+	int ret;
+
+	the_chip->charging_enabled = val;
+
+        ret = smb347_read(the_chip, CMD_A);
+
+	if (!the_chip->charging_enabled)
+        	ret |= CMD_A_SUSPEND_ENABLED;
+	else
+        	ret &= ~CMD_A_SUSPEND_ENABLED;
+
+        ret = smb347_write(the_chip, CMD_A, ret);
+
+	return 0;
+}
+
+static int smb347_enable_get(void *data, u64 *val)
+{
+	*val = the_chip->charging_enabled;
+	return 0;
+}
+
+DEFINE_SIMPLE_ATTRIBUTE(smb_enable_fops, smb347_enable_get,
+			smb347_enable_set, "%llu\n");
+
+static void smb347_debugfs_init(void)
+{
+  static struct dentry *debugfs_smb;
+
+  the_chip->charging_enabled = 1;
+
+  debugfs_smb = debugfs_create_dir("smb347", NULL);
+
+  debugfs_create_file("enable", 0644, debugfs_smb, NULL,
+			    &smb_enable_fops);
+
+}
 
 static int smb347_probe(struct i2c_client *client,
 			const struct i2c_device_id *id)
@@ -1295,6 +1335,8 @@ static int smb347_probe(struct i2c_client *client,
 	mutex_init(&smb->lock);
 	smb->client = client;
 	smb->pdata = pdata;
+
+	the_chip = smb;
 
 	ret = smb347_hw_init(smb);
 	if (ret < 0)
@@ -1352,6 +1394,8 @@ static int smb347_probe(struct i2c_client *client,
 
 	smb->dentry = debugfs_create_file("smb347-regs", S_IRUSR, NULL, smb,
 					  &smb347_debugfs_fops);
+	
+	smb347_debugfs_init();
 
 	return 0;
 }
