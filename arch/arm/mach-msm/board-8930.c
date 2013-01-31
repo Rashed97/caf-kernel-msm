@@ -3320,12 +3320,7 @@ static void __init msm8930_pm8917_pdata_fixup(void)
 	pdata->uses_pm8917 = true;
 }
 
-#ifdef CONFIG_CHARGER_SMB347
-#define PWR_ON_EVENT_USB_CHG   0x20
-bool power_off_charging = 0;
-extern int pm8921_is_usb_chg_plugged_in(void);
 extern int power_on_mode;
-#endif
 
 static void check_power_on_reason(void)
 {
@@ -3334,13 +3329,6 @@ static void check_power_on_reason(void)
 
 	boot_reason = *(unsigned int *)
 		(smem_get_entry(SMEM_POWER_ON_STATUS_INFO, &smem_size));
-
-	#ifdef CONFIG_CHARGER_SMB347
-	if ((boot_reason == PWR_ON_EVENT_USB_CHG) && (pm8921_is_usb_chg_plugged_in()) && (power_on_mode != 0x77665501))
-		power_off_charging = 1;
-
-	printk("%s, power_off_charging = %d\n", __FUNCTION__, power_off_charging);
-	#endif
 
 	printk("Boot Reason = 0x%02x power_on_mode=0x%08x\n", boot_reason, power_on_mode);
 }
