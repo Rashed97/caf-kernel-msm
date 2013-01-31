@@ -198,8 +198,16 @@ static void msm_restart_prepare(const char *cmd)
 	set_dload_mode(in_panic);
 
 	/* Write download mode flags if restart_mode says so */
-	if (restart_mode == RESTART_DLOAD)
+	if (restart_mode == RESTART_DLOAD) {
+		/* set MAGIC to prevent SD RAMDUMP */
+		__raw_writel(0x1, dload_mode_addr + (sizeof(unsigned int) * 6));
 		set_dload_mode(1);
+	} else {
+		/* SD RAMDUMP may start, save timestamp */
+		struct timespec ts = {0};
+		getnstimeofday(&ts);
+		__raw_writel((unsigned int)(ts.tv_sec), dload_mode_addr + (sizeof(unsigned int) * 6));
+	}
 
 	/* Kill download mode if master-kill switch is set */
 	if (!download_mode)
