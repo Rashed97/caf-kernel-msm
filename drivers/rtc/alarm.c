@@ -35,6 +35,11 @@
 
 static int debug_mask = ANDROID_ALARM_PRINT_ERROR | \
 			ANDROID_ALARM_PRINT_INIT_STATUS;
+/*TK_0005, Case01096310, 20130131, test RTC power on feature, Start */
+static struct rtc_time testuse_rtc_time;
+static struct rtc_wkalrm testuse_alarm_time;
+static unsigned long testuse_set_alarm_time = 0;
+/*TK_0005, Case01096310, 20130131, test RTC power on feature, End */
 module_param_named(debug_mask, debug_mask, int, S_IRUGO | S_IWUSR | S_IWGRP);
 
 #define pr_alarm(debug_level_mask, args...) \
@@ -68,6 +73,83 @@ static struct wake_lock alarm_rtc_wake_lock;
 static struct platform_device *alarm_platform_dev;
 struct alarm_queue alarms[ANDROID_ALARM_TYPE_COUNT];
 static bool suspended;
+
+/*TK_0005, Case01096310, 20130131, test RTC power on feature, Start */
+static int get_testuse_rtc_time(char *buffer, struct kernel_param *kp)
+{
+	rtc_read_time(alarm_rtc_dev, &testuse_rtc_time);
+
+	return sprintf(buffer, "RTC_TIME : \n\
+ testuse_rtc_time.sec = %d,\n testuse_rtc_time.min = %d,\n\
+ testuse_rtc_time.hour = %d,\n testuse_rtc_time.mday = %d,\n\
+ testuse_rtc_time.mon = %d,\n testuse_rtc_time.year = %d,\n\
+ testuse_rtc_time.wday = %d,\n testuse_rtc_time.yday = %d,\n",\
+	testuse_rtc_time.tm_sec, testuse_rtc_time.tm_min,\
+	testuse_rtc_time.tm_hour,  testuse_rtc_time.tm_mday,\
+	testuse_rtc_time.tm_mon, testuse_rtc_time.tm_year,\
+	testuse_rtc_time.tm_wday, testuse_rtc_time.tm_yday);
+}
+module_param_call(testuse_rtc_time, NULL, get_testuse_rtc_time, NULL, 0644);
+
+static int get_testuse_alarm_time(char *buffer, struct kernel_param *kp)
+{
+	rtc_read_alarm(alarm_rtc_dev, &testuse_alarm_time);
+
+	return sprintf(buffer, "GETING_ALARM_TIME : \n\
+ testuse_alarm_time.enable = %d,\n testuse_alarm_time.pending = %d,\n\
+ testuse_alarm_time.time.sec = %d,\n testuse_alarm_time.time.min = %d,\n\
+ testuse_alarm_time.time.hour = %d,\n testuse_alarm_time.time.mday = %d,\n\
+ testuse_alarm_time.time.mon = %d,\n testuse_alarm_time.time.year = %d,\n\
+ testuse_alarm_time.time.wday = %d,\n testuse_alarm_time.time.yday = %d,\n",\
+	(int)testuse_alarm_time.enabled , (int)testuse_alarm_time.pending,\
+	testuse_alarm_time.time.tm_sec, testuse_alarm_time.time.tm_min,\
+	testuse_alarm_time.time.tm_hour,  testuse_alarm_time.time.tm_mday,\
+	testuse_alarm_time.time.tm_mon, testuse_alarm_time.time.tm_year,\
+	testuse_alarm_time.time.tm_wday, testuse_alarm_time.time.tm_yday);
+}
+
+static int set_testuse_alarm_time(const char *val, struct kernel_param *kp)
+{
+	int ret;
+	static struct rtc_time testuse_set_alarm_time_rtc_time_struct;
+	static struct rtc_wkalrm testuse_set_alarm_time_rtc_wkalrm_struct;
+
+	ret = param_set_int(val, kp);
+	if (ret) {
+		pr_err("error setting value %d\n", ret);
+		return ret;
+	}
+
+	testuse_set_alarm_time_rtc_wkalrm_struct.enabled = 1;
+	testuse_set_alarm_time_rtc_wkalrm_struct.pending = 0;
+	rtc_time_to_tm(testuse_set_alarm_time, &testuse_set_alarm_time_rtc_time_struct);
+	testuse_set_alarm_time_rtc_wkalrm_struct.time.tm_sec = testuse_set_alarm_time_rtc_time_struct.tm_sec;
+	testuse_set_alarm_time_rtc_wkalrm_struct.time.tm_min = testuse_set_alarm_time_rtc_time_struct.tm_min;
+	testuse_set_alarm_time_rtc_wkalrm_struct.time.tm_hour = testuse_set_alarm_time_rtc_time_struct.tm_hour;
+	testuse_set_alarm_time_rtc_wkalrm_struct.time.tm_mday = testuse_set_alarm_time_rtc_time_struct.tm_mday;
+	testuse_set_alarm_time_rtc_wkalrm_struct.time.tm_mon = testuse_set_alarm_time_rtc_time_struct.tm_mon;
+	testuse_set_alarm_time_rtc_wkalrm_struct.time.tm_year = testuse_set_alarm_time_rtc_time_struct.tm_year;
+	testuse_set_alarm_time_rtc_wkalrm_struct.time.tm_wday = testuse_set_alarm_time_rtc_time_struct.tm_wday;
+	testuse_set_alarm_time_rtc_wkalrm_struct.time.tm_yday = testuse_set_alarm_time_rtc_time_struct.tm_yday;	
+
+	printk(KERN_EMERG "SETTING ALARM_TIME : \n\
+ testuse_alarm_time.enable = %d,\n testuse_alarm_time.pending = %d,\n\
+ testuse_alarm_time.time.sec = %d,\n testuse_alarm_time.time.min = %d,\n\
+ testuse_alarm_time.time.hour = %d,\n testuse_alarm_time.time.mday = %d,\n\
+ testuse_alarm_time.time.mon = %d,\n testuse_alarm_time.time.year = %d,\n\
+ testuse_alarm_time.time.wday = %d,\n testuse_alarm_time.time.yday = %d,\n",\
+	(int)testuse_set_alarm_time_rtc_wkalrm_struct.enabled , (int)testuse_set_alarm_time_rtc_wkalrm_struct.pending,\
+	testuse_set_alarm_time_rtc_wkalrm_struct.time.tm_sec, testuse_set_alarm_time_rtc_wkalrm_struct.time.tm_min,\
+	testuse_set_alarm_time_rtc_wkalrm_struct.time.tm_hour,  testuse_set_alarm_time_rtc_wkalrm_struct.time.tm_mday,\
+	testuse_set_alarm_time_rtc_wkalrm_struct.time.tm_mon, testuse_set_alarm_time_rtc_wkalrm_struct.time.tm_year,\
+	testuse_set_alarm_time_rtc_wkalrm_struct.time.tm_wday, testuse_set_alarm_time_rtc_wkalrm_struct.time.tm_yday);
+
+	rtc_set_alarm(alarm_rtc_dev, &testuse_set_alarm_time_rtc_wkalrm_struct);
+
+	return 0;
+}
+module_param_call(testuse_alarm_time, set_testuse_alarm_time, get_testuse_alarm_time, &testuse_set_alarm_time, 0644);
+/*TK_0005, Case01096310, 20130131, test RTC power on feature, End */
 
 static void update_timer_locked(struct alarm_queue *base, bool head_removed)
 {
