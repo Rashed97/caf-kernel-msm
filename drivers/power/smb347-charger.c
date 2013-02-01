@@ -144,7 +144,8 @@ struct smb347_charger {
 	bool			usb_online;
 	bool			charging_enabled;
 	struct dentry		*dentry;
-	const struct smb347_charger_platform_data *pdata;
+	const struct 		smb347_charger_platform_data *pdata;
+	int			charger_type_flags;
 };
 
 /* Fast charge current in uA */
@@ -203,6 +204,20 @@ static const unsigned int ccc_tbl[] = {
 
 struct smb347_charger *the_chip;
 
+/* USB calls these to tell us how much max usb current the system can draw */
+void smb347_charger_vbus_draw(unsigned int mA)
+{
+	pr_debug("Enter charge=%d\n", mA);
+
+	if (mA == IDEV_CHG_MIN)
+		the_chip->charger_type_flags = POWER_SUPPLY_CHARGER_USB;
+	else if (mA == IDEV_CHG_MAX)
+		the_chip->charger_type_flags = POWER_SUPPLY_CHARGER_AC;
+	else
+		the_chip->charger_type_flags = POWER_SUPPLY_CHARGER_REMOVE;
+}
+EXPORT_SYMBOL_GPL(smb347_charger_vbus_draw);
+
 /* Convert register value to current using lookup table */
 static int hw_to_current(const unsigned int *tbl, size_t size, unsigned int val)
 {
@@ -239,31 +254,6 @@ static int smb347_write(struct smb347_charger *smb, u8 reg, u8 val)
 		dev_warn(&smb->client->dev, "failed to write reg 0x%x: %d\n",
 			 reg, ret);
 	return ret;
-}
-
-static int charger_type_flags;
-/* USB calls these to tell us how much max usb current the system can draw */
-void smb347_charger_vbus_draw(unsigned int mA)
-{
-	pr_debug("Enter charge=%d\n", mA);
-
-	if (mA == IDEV_CHG_MIN)
-		charger_type_flags = POWER_SUPPLY_CHARGER_USB;
-	else if (mA == IDEV_CHG_MAX)
-		charger_type_flags = POWER_SUPPLY_CHARGER_AC;
-	else
-		charger_type_flags = POWER_SUPPLY_CHARGER_REMOVE;
-}
-EXPORT_SYMBOL_GPL(smb347_charger_vbus_draw);
-
-void power_supply_update(struct smb347_charger *smb)
-{
-	printk("%s smb->mains_online=%d smb->usb_online=%d\n", __FUNCTION__, smb->mains_online, smb->usb_online);
-
-	if (smb->mains_online)
-		power_supply_changed(&smb->mains);
-	else if(smb->usb_online)
-		power_supply_changed(&smb->usb);
 }
 
 void update_charger_type(struct smb347_charger *smb)
@@ -314,7 +304,7 @@ static int smb347_update_status(struct smb347_charger *smb)
 	bool charge	= false;
 	bool usb	= false;
 	bool dc		= false;
-	int ret;
+	int ret = 0;
 
 	ret = smb347_read(smb, IRQSTAT_E);
 	if (ret < 0)
@@ -329,12 +319,12 @@ static int smb347_update_status(struct smb347_charger *smb)
         if (charge == -EINVAL)
                charge = 0;
 
-	if ((charger_type_flags == POWER_SUPPLY_CHARGER_AC) && charge)
+	if ((the_chip->charger_type_flags == POWER_SUPPLY_CHARGER_AC) && charge)
 	{
 		dc  = 1;
 		usb = 0;
 	}
-	else if ((charger_type_flags == POWER_SUPPLY_CHARGER_USB) && charge)
+	else if ((the_chip->charger_type_flags == POWER_SUPPLY_CHARGER_USB) && charge)
 	{
 		dc  = 0;
 		usb = 1;
@@ -345,18 +335,20 @@ static int smb347_update_status(struct smb347_charger *smb)
 	}
 
 	pr_debug("%s dc=%d usb=%d charge=%d charger_type=%d\n", __FUNCTION__, dc,
-		usb, charge, charger_type_flags);
+		usb, charge, the_chip->charger_type_flags);
 
 	mutex_lock(&smb->lock);
 
         if (smb->usb_online != usb) {
                 smb->usb_online = usb;
                 power_supply_changed(&smb->usb);
+		ret = 1;
         }
 
         if (smb->mains_online != dc) {
                 smb->mains_online = dc;
                 power_supply_changed(&smb->mains);
+		ret = 1;
         }
 
 	update_charger_type(smb);
@@ -848,6 +840,8 @@ static int smb347_hw_init(struct smb347_charger *smb)
 	if (ret < 0)
 		goto fail;
 
+	smb->charger_type_flags = POWER_SUPPLY_CHARGER_REMOVE;
+
 	ret = smb347_update_status(smb);
 	if (ret < 0)
 		goto fail;
@@ -855,7 +849,7 @@ static int smb347_hw_init(struct smb347_charger *smb)
 	ret = smb347_update_online(smb);
 
 fail:
-	//smb347_set_writable(smb, false);
+
 	return ret;
 }
 
@@ -931,10 +925,6 @@ static irqreturn_t smb347_interrupt(int irq, void *data)
 	if (irqstat_e & (IRQSTAT_E_USBIN_UV_IRQ | IRQSTAT_E_DCIN_UV_IRQ)) {
 		if (smb347_update_status(smb) > 0) {
 			smb347_update_online(smb);
-			if (smb->mains_online)
-				power_supply_changed(&smb->mains);
-			else if(smb->usb_online)
-				power_supply_changed(&smb->usb);
 		}
 		ret = IRQ_HANDLED;
 	}
@@ -993,7 +983,6 @@ static int smb347_irq_set(struct smb347_charger *smb, bool enable)
 	}
 
 fail:
-	//smb347_set_writable(smb, false);
 	return ret;
 }
 
@@ -1045,12 +1034,11 @@ static int smb347_irq_init(struct smb347_charger *smb)
 	if (ret < 0)
 		goto fail_readonly;
 
-	//smb347_set_writable(smb, false);
 	smb->client->irq = irq;
 	return 0;
 
 fail_readonly:
-	//smb347_set_writable(smb, false);
+
 fail_irq:
 	free_irq(irq, smb);
 fail_gpio:
@@ -1332,7 +1320,9 @@ static int smb347_probe(struct i2c_client *client,
 	if (!pdata->use_mains && !pdata->use_usb)
 		return -EINVAL;
 
+	the_chip = devm_kzalloc(dev, sizeof(*the_chip), GFP_KERNEL);
 	smb = devm_kzalloc(dev, sizeof(*smb), GFP_KERNEL);
+
 	if (!smb)
 		return -ENOMEM;
 
