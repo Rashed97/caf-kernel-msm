@@ -19,6 +19,9 @@
 #include <linux/platform_device.h>
 #include <linux/slab.h>
 
+#define EVENT_TYPE_RF ABS_DISTANCE
+#define EVENT_TYPE_WIFI ABS_MISC
+
 struct iqs128_data {
 	struct iqs128_platform_data *pdata;
 	struct input_dev *input;
@@ -31,26 +34,46 @@ enum {
 static int debug_mask = 0;
 module_param_named(debug_mask, debug_mask, int, S_IRUGO | S_IWUSR | S_IWGRP);
 
-static void iqs128_report_event(struct iqs128_data *iqs128_data, int value)
+static void iqs128_report_event(struct iqs128_data *iqs128_data)
 {
-	input_report_abs(iqs128_data->input, ABS_DISTANCE, value);
+	int i;
+	int detect_rf = 0;
+	int detect_wifi = 0;
+
+	for (i = 0; i < iqs128_data->pdata->num_data; i++) {
+		if (iqs128_data->pdata->gpio_data[i].status) {
+			switch (iqs128_data->pdata->gpio_data[i].type) {
+			case TYPE_RF:
+				detect_rf |= 1;
+				break;
+			case TYPE_WIFI:
+				detect_wifi |= 1;
+				break;
+			default:
+				break;
+			}
+		}
+	}
+printk("rf:%d wifi:%d\n", detect_rf, detect_wifi);
+	input_report_abs(iqs128_data->input, EVENT_TYPE_RF, detect_rf);
+	input_report_abs(iqs128_data->input, EVENT_TYPE_WIFI, detect_wifi);
 	input_sync(iqs128_data->input);
 }
 
 static void iqs128_work_func(struct work_struct *work)
 {
 	int i;
-	int object_detect = 0;
 	struct iqs128_data *iqs128_data =
 			container_of(work, struct iqs128_data, work);
 
 	for (i = 0; i < iqs128_data->pdata->num_data; i++) {
-		if (gpio_get_value_cansleep(iqs128_data->pdata->gpio_data[i].irq_gpio)) {
+		iqs128_data->pdata->gpio_data[i].status =
+				gpio_get_value_cansleep(iqs128_data->pdata->gpio_data[i].irq_gpio);
+		if (iqs128_data->pdata->gpio_data[i].status) {
 			if (debug_mask & DEBUG_ENABLE)
 				printk(KERN_INFO "iqs128 psensor detected"
 						"the object is approaching. gpio:%d\n",
 						iqs128_data->pdata->gpio_data[i].irq_gpio);
-			object_detect |= 1;
 		} else {
 			if (debug_mask & DEBUG_ENABLE)
 				printk(KERN_INFO "iqs128 psensor detected"
@@ -59,7 +82,7 @@ static void iqs128_work_func(struct work_struct *work)
 		}
 	}
 
-	iqs128_report_event(iqs128_data ,object_detect);
+	iqs128_report_event(iqs128_data);
 }
 
 static irqreturn_t iqs128_int_handler(int irq, void *dev_id)
@@ -112,7 +135,8 @@ static int __devinit iqs128_probe(struct platform_device *pdev)
 	dev->name = "capacitive p-sensor";
 
 	set_bit(EV_REL, dev->evbit);
-	input_set_capability(dev, EV_ABS, ABS_DISTANCE);
+	input_set_capability(dev, EV_ABS, EVENT_TYPE_RF);
+	input_set_capability(dev, EV_ABS, EVENT_TYPE_WIFI);
 	input_set_abs_params(dev, ABS_DISTANCE, 0, 2, 0, 0);
 
 	input_set_drvdata(dev, iqs128_data);
