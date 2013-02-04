@@ -254,16 +254,22 @@ static struct iqs128_gpio_data iqs128_gpio_data[] = {
 		.irq_gpio = IQS128_GPIO23_IRQ,
 		.irq = MSM_GPIO_TO_INT(IQS128_GPIO23_IRQ),
 		.irqflags = IRQF_TRIGGER_FALLING | IRQF_TRIGGER_RISING,
+		.type = TYPE_RF,
+		.status = 0,
 	},
 	{
 		.irq_gpio = IQS128_GPIO24_IRQ,
 		.irq = MSM_GPIO_TO_INT(IQS128_GPIO24_IRQ),
 		.irqflags = IRQF_TRIGGER_FALLING | IRQF_TRIGGER_RISING,
+		.type = TYPE_RF,
+		.status = 0,
 	},
 	{
 		.irq_gpio = IQS128_GPIO92_IRQ,
 		.irq = MSM_GPIO_TO_INT(IQS128_GPIO92_IRQ),
 		.irqflags = IRQF_TRIGGER_FALLING | IRQF_TRIGGER_RISING,
+		.type = TYPE_WIFI,
+		.status = 0,
 	},
 };
 
