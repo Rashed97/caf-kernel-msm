@@ -34,6 +34,38 @@ enum {
 static int debug_mask = 0;
 module_param_named(debug_mask, debug_mask, int, S_IRUGO | S_IWUSR | S_IWGRP);
 
+static ssize_t iqs128_status_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	int i;
+	int ret;
+	int size = 0;
+	struct iqs128_data *iqs128_data = dev_get_drvdata(dev);
+
+	for (i = 0; i < iqs128_data->pdata->num_data; i++) {
+		ret = sprintf(buf + size, "gpio%d = %d\n",
+				iqs128_data->pdata->gpio_data[i].irq_gpio,
+				iqs128_data->pdata->gpio_data[i].status);
+		if (ret < 0)
+			return ret;
+		size += ret;
+	}
+
+	return size;
+}
+
+static DEVICE_ATTR(status, S_IRUGO | S_IWUSR | S_IWGRP,
+		iqs128_status_show, NULL);
+
+static struct attribute *iqs128_attributes[] = {
+	&dev_attr_status.attr,
+	NULL
+};
+
+static struct attribute_group iqs128_attribute_group = {
+	.attrs = iqs128_attributes,
+};
+
 static void iqs128_report_event(struct iqs128_data *iqs128_data)
 {
 	int i;
@@ -149,6 +181,13 @@ static int __devinit iqs128_probe(struct platform_device *pdev)
 
 	iqs128_data->input = dev;
 
+	error = sysfs_create_group(&iqs128_data->input->dev.kobj,
+			&iqs128_attribute_group);
+	if (error < 0) {
+		input_free_device(dev);
+		goto kfree;
+	}
+
 	for (i = 0; i < pdata->num_data; i++) {
 		if (gpio_is_valid(pdata->gpio_data[i].irq_gpio)) {
 			error = gpio_request(pdata->gpio_data[i].irq_gpio,
@@ -156,13 +195,13 @@ static int __devinit iqs128_probe(struct platform_device *pdev)
 			if (error) {
 				dev_err(&pdev->dev, "unable to request gpio [%d]\n",
 						pdata->gpio_data[i].irq_gpio);
-				goto kfree;
+				goto remove_sysfs;
 			}
 			error = gpio_direction_input(pdata->gpio_data[i].irq_gpio);
 			if (error) {
 				dev_err(&pdev->dev, "unable to set direction for gpio [%d]\n",
 						pdata->gpio_data[i].irq_gpio);
-				goto kfree;
+				goto remove_sysfs;
 			}
 
 			error = request_threaded_irq(pdata->gpio_data[i].irq, NULL,
@@ -170,7 +209,7 @@ static int __devinit iqs128_probe(struct platform_device *pdev)
 					pdev->dev.driver->name, iqs128_data);
 			if (error) {
 				dev_err(&pdev->dev, "Failed to register interrupt\n");
-				goto kfree;
+				goto remove_sysfs;
 			}
 		}
 	}
@@ -178,6 +217,8 @@ static int __devinit iqs128_probe(struct platform_device *pdev)
 	INIT_WORK(&iqs128_data->work, iqs128_work_func);
 
 	return 0;
+remove_sysfs:
+	sysfs_remove_group(&iqs128_data->input->dev.kobj, &iqs128_attribute_group);
 kfree:
 	kfree(iqs128_data);
 exit:
@@ -193,6 +234,8 @@ static int __devexit iqs128_remove(struct platform_device *pdev)
 		free_irq(iqs128_data->pdata->gpio_data[i].irqflags, iqs128_data);
 		gpio_free(iqs128_data->pdata->gpio_data[i].irq_gpio);
 	}
+
+	sysfs_remove_group(&iqs128_data->input->dev.kobj, &iqs128_attribute_group);
 	kfree(iqs128_data);
 
 	printk(KERN_INFO "psensor iqs128 remove!!\n");
