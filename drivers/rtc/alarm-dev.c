@@ -58,6 +58,11 @@ static uint32_t wait_pending;
 
 static struct alarm alarms[ANDROID_ALARM_TYPE_COUNT];
 
+#define ANDROID_ALARM_RTC_DEVICEUP 6
+void set_alarm_rtc_deviceup_type(int isdeviceup);
+int get_alarm_rtc_deviceup_type(void);
+void set_alarm_deviceup_dev(ktime_t end);
+
 static long alarm_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	int rv = 0;
@@ -66,7 +71,14 @@ static long alarm_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	struct timespec new_rtc_time;
 	struct timespec tmp_time;
 	enum android_alarm_type alarm_type = ANDROID_ALARM_IOCTL_TO_TYPE(cmd);
-	uint32_t alarm_type_mask = 1U << alarm_type;
+	uint32_t alarm_type_mask = 0;
+	if (alarm_type == ANDROID_ALARM_RTC_DEVICEUP) {
+		alarm_type = ANDROID_ALARM_RTC_WAKEUP;
+		set_alarm_rtc_deviceup_type(1);
+	} else {
+		set_alarm_rtc_deviceup_type(0);
+	}
+	alarm_type_mask = 1U << alarm_type;
 
 	if (alarm_type >= ANDROID_ALARM_TYPE_COUNT)
 		return -EINVAL;
@@ -126,6 +138,7 @@ from_old_alarm_set:
 			timespec_to_ktime(new_alarm_time),
 			timespec_to_ktime(new_alarm_time));
 		spin_unlock_irqrestore(&alarm_slock, flags);
+		set_alarm_deviceup_dev(timespec_to_ktime(new_alarm_time));
 		if (ANDROID_ALARM_BASE_CMD(cmd) != ANDROID_ALARM_SET_AND_WAIT(0)
 		    && cmd != ANDROID_ALARM_SET_AND_WAIT_OLD)
 			break;
