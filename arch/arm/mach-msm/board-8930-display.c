@@ -255,6 +255,12 @@ static int mipi_dsi_cdp_panel_power(int on)
 				gpio_free(DSI_LVDS_PWR_GPIO);
 				return -ENODEV;
 			}
+			rc = gpio_direction_output(DSI_LVDS_PWR_GPIO, 0);
+			if (rc) {
+				pr_err("gpio_direction_output failed for %d gpio rc=%d\n",
+						DSI_LVDS_PWR_GPIO, rc);
+				return -ENODEV;
+			}
 		}
 		rc = gpio_request(DISP_3D_2D_MODE, "disp_3d_2d");
 		if (rc) {
