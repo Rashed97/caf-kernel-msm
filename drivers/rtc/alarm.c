@@ -245,7 +245,63 @@ void alarm_init(struct alarm *alarm,
 	pr_alarm(FLOW, "created alarm, type %d, func %pF\n", type, function);
 }
 
+static int alarm_rtc_deviceup = 0;
 
+void set_alarm_rtc_deviceup_type(int isdeviceup)
+{
+	alarm_rtc_deviceup = isdeviceup;
+};
+
+int get_alarm_rtc_deviceup_type(void)
+{
+	return alarm_rtc_deviceup;
+};
+
+static unsigned long poweroffalarm_adjusttime = 120;
+
+static int
+rtc_set_deviceup(struct rtc_device *rtc_dev, struct rtc_wkalrm *alarm)
+{
+	unsigned long Expiration = 0;
+	unsigned long now = get_seconds();
+	unsigned long alarmtime = 0;
+	struct rtc_wkalrm rtc_alarmtime;
+
+	rtc_tm_to_time(&alarm->time, &alarmtime);
+	if (alarmtime <= now) {
+		Expiration = 0;
+	} else {
+		Expiration = alarmtime - now;
+	}
+
+	if (Expiration >= poweroffalarm_adjusttime) {
+		rtc_alarmtime.enabled = 1;
+		rtc_time_to_tm((alarmtime - poweroffalarm_adjusttime), &rtc_alarmtime.time);
+		rtc_alarmtime.pending = 0;
+		rtc_set_alarm(rtc_dev, &rtc_alarmtime);
+		printk(KERN_EMERG
+				"poweroff alarm: set device up alarm Expiration = %lu\n",
+				Expiration);
+	} else {
+		//Cancel device up alarm
+		alarm->enabled = 0;
+		rtc_set_alarm(rtc_dev, alarm);
+		printk(KERN_EMERG
+		       "poweroff alarm: Cancel device up alarm\n");
+	}
+	return 0;
+}
+
+void set_alarm_deviceup_dev(ktime_t end)
+{
+    if (get_alarm_rtc_deviceup_type()) {
+        struct rtc_wkalrm rtc_alarm;
+        rtc_time_to_tm(ktime_to_timespec(end).tv_sec, &rtc_alarm.time);
+        rtc_alarm.enabled = 1;
+        rtc_set_deviceup(alarm_rtc_dev, &rtc_alarm);
+        set_alarm_rtc_deviceup_type(0);
+    }
+};
 /**
  * alarm_start_range - (re)start an alarm
  * @alarm:	the alarm to be added
@@ -520,7 +576,7 @@ static int alarm_suspend(struct platform_device *pdev, pm_message_t state)
 
 		rtc_time_to_tm(rtc_alarm_time, &rtc_alarm.time);
 		rtc_alarm.enabled = 1;
-		rtc_set_alarm(alarm_rtc_dev, &rtc_alarm);
+		//rtc_set_alarm(alarm_rtc_dev, &rtc_alarm);
 		rtc_read_time(alarm_rtc_dev, &rtc_current_rtc_time);
 		rtc_tm_to_time(&rtc_current_rtc_time, &rtc_current_time);
 		pr_alarm(SUSPEND,
@@ -531,7 +587,7 @@ static int alarm_suspend(struct platform_device *pdev, pm_message_t state)
 			pr_alarm(SUSPEND, "alarm about to go off\n");
 			memset(&rtc_alarm, 0, sizeof(rtc_alarm));
 			rtc_alarm.enabled = 0;
-			rtc_set_alarm(alarm_rtc_dev, &rtc_alarm);
+			//rtc_set_alarm(alarm_rtc_dev, &rtc_alarm);
 
 			spin_lock_irqsave(&alarm_slock, flags);
 			suspended = false;
@@ -556,7 +612,7 @@ static int alarm_resume(struct platform_device *pdev)
 
 	memset(&alarm, 0, sizeof(alarm));
 	alarm.enabled = 0;
-	rtc_set_alarm(alarm_rtc_dev, &alarm);
+	//rtc_set_alarm(alarm_rtc_dev, &alarm);
 
 	spin_lock_irqsave(&alarm_slock, flags);
 	suspended = false;
