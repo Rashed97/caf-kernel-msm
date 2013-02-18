@@ -92,6 +92,8 @@ static int hdmi_msm_read_edid(void);
 static void hdmi_msm_hpd_off(void);
 static boolean hdmi_msm_is_dvi_mode(void);
 
+static int hdmi_msm_hpd_feature(int on);
+
 #ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL_CEC_SUPPORT
 
 static void hdmi_msm_cec_line_latch_detect(void);
@@ -137,7 +139,6 @@ static boolean msg_recv_complete = TRUE;
 #define HDMI_MSM_CEC_RETRANSMIT_ENABLE		BIT(0)
 
 #define HDMI_MSM_CEC_WR_DATA_DATA(___d)		(((___d)&0xFF) << 8)
-
 
 void hdmi_msm_cec_init(void)
 {
@@ -4555,6 +4556,33 @@ static bool hdmi_msm_cable_connected(void)
 			external_common_state->hpd_state;
 }
 
+static ssize_t hdmi_msm_online_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	//struct hdmi_msm_panel_data *led = dev_get_drvdata(dev);
+    ssize_t ret = 0;
+    int hdmi_online = 1;
+
+    ret = sprintf(buf,"%d",hdmi_online);
+	return ret;
+}
+
+static ssize_t hdmi_msm_online_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	//struct hdmi_msm_panel_data *led = dev_get_drvdata(dev);
+    int hdmi_online = 0;
+
+    sscanf(buf, "%d", &hdmi_online);
+
+    hdmi_msm_hpd_feature(hdmi_online);
+    //hdmi_msm_isr(0,NULL);
+    DEV_ERR("%s: hdmi_online==%d\n",__func__,hdmi_online);
+	return count;
+}
+
+static DEVICE_ATTR(online, 0664, hdmi_msm_online_show, hdmi_msm_online_store);
+
 static int __devinit hdmi_msm_probe(struct platform_device *pdev)
 {
 	int rc;
@@ -4605,6 +4633,14 @@ static int __devinit hdmi_msm_probe(struct platform_device *pdev)
 		#undef IO_REMAP
 		#undef GET_IRQ
 		return 0;
+	}
+
+    DEV_ERR("++%s: device_create_file\n",__func__);
+
+    rc = device_create_file(&pdev->dev,&dev_attr_online);
+	if (rc) {
+		dev_err(&pdev->dev, "device_create_file failed: on_ms\n");
+		goto error;
 	}
 
 	hdmi_msm_state->hdmi_app_clk = clk_get(&pdev->dev, "core_clk");
@@ -4834,6 +4870,7 @@ static struct platform_device this_device = {
 	.dev.platform_data = &hdmi_msm_panel_data,
 };
 
+
 static int __init hdmi_msm_init(void)
 {
 	int rc;
@@ -4853,6 +4890,7 @@ static int __init hdmi_msm_init(void)
 		goto init_exit;
 	}
 
+   
 	external_common_state = &hdmi_msm_state->common;
 
 	if (hdmi_prim_display && hdmi_prim_resolution)
