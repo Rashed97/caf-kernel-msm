@@ -376,7 +376,7 @@ static int mipi_dsi_cdp_panel_power(int on)
 			gpio_direction_output(PANEL_UD, 0);
 			usleep(20);
 		}
-		gpio_set_value(DSI_LVDS_PWR_GPIO, 1);
+		gpio_direction_output(DSI_LVDS_PWR_GPIO, 1);
 		usleep(10);
 		gpio_set_value(DISP_RST_GPIO, 1);
 		usleep(10);
@@ -394,7 +394,7 @@ static int mipi_dsi_cdp_panel_power(int on)
 			gpio_direction_output(PANEL_LR, 0);
 			gpio_direction_output(PANEL_UD, 0);
 		}
-		gpio_set_value(DSI_LVDS_PWR_GPIO, 0);
+		gpio_direction_output(DSI_LVDS_PWR_GPIO, 0);
 		gpio_set_value(DISP_RST_GPIO, 0);
 
 		if (machine_is_msm8x30_type1() || machine_is_msm8x30_type2()) {
