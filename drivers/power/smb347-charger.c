@@ -207,14 +207,27 @@ struct smb347_charger *the_chip;
 /* USB calls these to tell us how much max usb current the system can draw */
 void smb347_charger_vbus_draw(unsigned int mA)
 {
+	bool charge	= false;
 	pr_debug("Enter charge=%d\n", mA);
 
-	if (mA == IDEV_CHG_MIN)
+	if (mA == IDEV_CHG_MIN){
 		the_chip->charger_type_flags = POWER_SUPPLY_CHARGER_USB;
-	else if (mA == IDEV_CHG_MAX)
+		power_supply_changed(&the_chip->usb);
+	}
+	else if (mA == IDEV_CHG_MAX){
 		the_chip->charger_type_flags = POWER_SUPPLY_CHARGER_AC;
-	else
-		the_chip->charger_type_flags = POWER_SUPPLY_CHARGER_REMOVE;
+		power_supply_changed(&the_chip->mains);
+	}
+	else{
+		charge = pm8921_is_usb_chg_plugged_in();
+		if (charge == -EINVAL)
+			charge = 0;
+
+		if (!charge){
+				the_chip->charger_type_flags = POWER_SUPPLY_CHARGER_REMOVE;
+				power_supply_changed(&the_chip->battery);
+		}
+	}
 }
 EXPORT_SYMBOL_GPL(smb347_charger_vbus_draw);
 
@@ -922,7 +935,7 @@ static irqreturn_t smb347_interrupt(int irq, void *data)
 	 * If we got an under voltage interrupt it means that AC/USB input
 	 * was connected or disconnected.
 	 */
-	if (irqstat_e & (IRQSTAT_E_USBIN_UV_IRQ | IRQSTAT_E_DCIN_UV_IRQ)) {
+	if (!(irqstat_e & (IRQSTAT_E_USBIN_UV_STAT))){
 		if (smb347_update_status(smb) > 0) {
 			smb347_update_online(smb);
 		}
