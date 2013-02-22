@@ -696,6 +696,8 @@ static int msm8930_audrx_init(struct snd_soc_pcm_runtime *rtd)
 	mbhc_cfg.gpio = 37;
     gpio_request(37, "headset_insert");
 	mbhc_cfg.gpio_irq = gpio_to_irq(mbhc_cfg.gpio);
+    gpio_tlmm_config(GPIO_CFG(37, 0, 0, 3, 0), 0);
+    gpio_set_value(37, 1);
 	sitar_hs_detect(codec, &mbhc_cfg);
 
 	if (socinfo_get_pmic_model() != PMIC_MODEL_PM8917) {

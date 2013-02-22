@@ -1870,6 +1870,7 @@ static void hphocp_off_report(struct sitar_priv *sitar,
 	}
 
 	pr_info("%s: clear ocp status %x\n", __func__, jack_status);
+    gpio_set_value(37, 1);
 	codec = sitar->codec;
 	if (sitar->hph_status & jack_status) {
 		sitar->hph_status &= ~jack_status;
