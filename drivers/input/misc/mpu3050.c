@@ -43,6 +43,7 @@
 #include <linux/gpio.h>
 #include <linux/input/mpu3050.h>
 #include <linux/regulator/consumer.h>
+#include <../../../arch/arm/mach-msm/include/mach/socinfo.h>
 
 #define MPU3050_CHIP_ID		0x69
 
@@ -201,6 +202,7 @@ static int mpu3050_config_regulator(struct i2c_client *client, bool on)
 					goto error_vdd;
 				}
 			}
+if (!machine_is_msm8x30_type1()){
 
 			rc = regulator_enable(mpu_vreg[i].vreg);
 			if (rc) {
@@ -216,6 +218,7 @@ static int mpu3050_config_regulator(struct i2c_client *client, bool on)
 				regulator_put(mpu_vreg[i].vreg);
 				goto error_vdd;
 			}
+}
 		}
 		return rc;
 	} else {
