@@ -2446,6 +2446,8 @@ static int synaptics_rmi4_suspend(struct device *dev)
 			rmi4_data->board;
 
     printk(KERN_EMERG "%s %d %s\n", __func__, __LINE__, "");
+	platform_data->power_on(false);
+	return 0;
 
 	if (!rmi4_data->sensor_sleep) {
 		rmi4_data->touch_stopped = true;

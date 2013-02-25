@@ -537,8 +537,8 @@ msm8930_rpm_regulator_init_data[] __devinitdata = {
 	RPM_LDO(L26,     1, 1, 0, 1050000, 1050000, "8038_s2", 10000, 10000),
 
 	/*	ID     a_on pd ss		    supply */
-	RPM_VS(LVS1,	 1, 1, 0,		    "8038_l11"),
-	RPM_VS(LVS2,	 1, 1, 0,		    "8038_l11"),
+	RPM_VS(LVS1,	 0, 1, 0,		    "8038_l11"),
+	RPM_VS(LVS2,	 0, 1, 0,		    "8038_l11"),
 
 	/*	   ID            a_on ss min_corner  max_corner  supply */
 	RPM_CORNER(VDD_DIG_CORNER, 1, 1, RPM_VREG_CORNER_NONE,
