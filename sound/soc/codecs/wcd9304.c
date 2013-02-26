@@ -4291,7 +4291,7 @@ static void sitar_codec_decide_gpio_plug(struct snd_soc_codec *codec)
         mic_mv_total += mic_mv[i];
 	}
 
-    mic_mv_arvg = mic_mv_total / MBHC_NUM_DCE_PLUG_DETECT;
+    mic_mv_arvg = mic_mv_total / (MBHC_NUM_DCE_PLUG_DETECT - 1);
     if(mic_mv_arvg < US_HEADSET_DETECT_VLAUE && mic_mv_arvg > HEADPHONE_DETECT_VALUE) {
         mic_biase_switch_set_enable(MIC_BIASE_SWITCH_INV);
     }
