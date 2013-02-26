@@ -84,6 +84,7 @@ VREG_CONSUMERS(L9) = {
 	REGULATOR_SUPPLY("cam_vaf",             "4-0020"),
 	REGULATOR_SUPPLY("vdd",			"12-0018"),
 	REGULATOR_SUPPLY("vdd",			"12-0068"),
+	REGULATOR_SUPPLY("smb_l9",		"11-0035"),
 };
 VREG_CONSUMERS(L10) = {
 	REGULATOR_SUPPLY("8038_l10",		NULL),
@@ -217,6 +218,7 @@ VREG_CONSUMERS(LVS1) = {
 	REGULATOR_SUPPLY("ts_i2c",		"3-0070"),
 	REGULATOR_SUPPLY("cam_vio",             "4-0036"),
 	REGULATOR_SUPPLY("cam_vio",             "4-0021"),
+	REGULATOR_SUPPLY("smb_lvs1",		"11-0035"),
 };
 VREG_CONSUMERS(LVS2) = {
 	REGULATOR_SUPPLY("8038_lvs2",		NULL),
@@ -227,6 +229,7 @@ VREG_CONSUMERS(LVS2) = {
 	REGULATOR_SUPPLY("vcc_i2c",		"0-0048"),
 	REGULATOR_SUPPLY("vddio",		"12-0018"),
 	REGULATOR_SUPPLY("vlogic",		"12-0068"),
+	REGULATOR_SUPPLY("smb_lvs2",		"11-0035"),
 };
 VREG_CONSUMERS(EXT_5V) = {
 	REGULATOR_SUPPLY("ext_5v",		NULL),
@@ -537,8 +540,8 @@ msm8930_rpm_regulator_init_data[] __devinitdata = {
 	RPM_LDO(L26,     1, 1, 0, 1050000, 1050000, "8038_s2", 10000, 10000),
 
 	/*	ID     a_on pd ss		    supply */
-	RPM_VS(LVS1,	 1, 1, 0,		    "8038_l11"),
-	RPM_VS(LVS2,	 1, 1, 0,		    "8038_l11"),
+	RPM_VS(LVS1,	 0, 1, 0,		    "8038_l11"),
+	RPM_VS(LVS2,	 0, 1, 0,		    "8038_l11"),
 
 	/*	   ID            a_on ss min_corner  max_corner  supply */
 	RPM_CORNER(VDD_DIG_CORNER, 1, 1, RPM_VREG_CORNER_NONE,

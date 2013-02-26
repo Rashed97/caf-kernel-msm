@@ -2131,39 +2131,24 @@ static struct i2c_board_info mxt_device_info_8930[] __initdata = {
 #define CFG_PIN_EN_CTRL_ACTIVE_LOW		0x60
 static struct regulator *regulator_lvs2;
 static struct regulator *regulator_lvs1;
+static struct regulator *regulator_l9;
 
 static void smb_init_power(bool on)
 {
 
 	pr_debug("***%s***on=%d\n", __FUNCTION__, on);
 
-	regulator_lvs2= regulator_get(NULL, "8038_lvs2");
-	msleep(10);
-	regulator_lvs1= regulator_get(NULL, "8038_lvs1");
-	msleep(10);
-
 	if (on) {	
 		regulator_enable(regulator_lvs2);
-		msleep(10);
 		regulator_enable(regulator_lvs1);
-		msleep(10);
+		regulator_enable(regulator_l9);
 	}
 	else{
-		
 		regulator_disable(regulator_lvs2);
-		msleep(10);
 		regulator_disable(regulator_lvs1);
-		msleep(10);
+		regulator_disable(regulator_l9);
 	}
 
-	if (gpio_request(CHG_HC_EN, "CHG_HC_EN")) {
-		pr_err("%s.failed to get smb347_IRQ=%d.\n",
-		__FUNCTION__, CHG_HC_EN);
-	}
-	if (gpio_request(CHG_INOK, "CHG_INOK")) {
-		pr_err("%s.failed to get smb347_SYSOK=%d.\n",
-		__FUNCTION__, CHG_INOK);
-	}
 }
 
 static void smb_enable_charging(bool on)
@@ -2185,8 +2170,22 @@ static void smb_enable_charging(bool on)
 	}
 }
 
+static int smb347_init(struct device *dev)
+{
+	pr_info("***%s***\n", __FUNCTION__);
+	regulator_lvs2 = regulator_get(dev, "smb_lvs2");
+	regulator_lvs1 = regulator_get(dev, "smb_lvs1");
+	regulator_l9   = regulator_get(dev, "smb_l9");
+
+	smb_init_power(1);
+	if (gpio_request(CHG_INOK, "CHG_INOK"))
+		pr_err("%s.failed to get smb347_SYSOK=%d.\n",
+		__FUNCTION__, CHG_INOK);
+	return 0;
+}
+
 static struct smb347_charger_platform_data smb347_data = {
-       .max_charge_current=2000000,
+       .max_charge_current=2500000,
        .max_charge_voltage=4200000,
        .pre_charge_current=250000,
        .termination_current=150000,
@@ -2208,6 +2207,7 @@ static struct smb347_charger_platform_data smb347_data = {
        .use_usb_otg=0,
        .enable_power=smb_init_power,
        .enable_charging=smb_enable_charging,
+       .platform_init = smb347_init,
 };
 
 static struct i2c_board_info smb347_dev[] __initdata= {

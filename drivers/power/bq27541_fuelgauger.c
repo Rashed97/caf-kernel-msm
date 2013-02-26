@@ -115,6 +115,7 @@ struct bq27541_access_methods {
 struct bq27541_device_info {
 	struct device			*dev;
 	int				id;
+	bool				power_cable_boot;
 	struct bq27541_access_methods	*bus;
 	struct i2c_client		*client;
 	struct work_struct		counter;
@@ -364,7 +365,11 @@ static void bq27541_hw_config(struct work_struct *work)
 
 	di  = container_of(work, struct bq27541_device_info, hw_config.work);
 	ret = bq27541_chip_config(di);
+
+	di->power_cable_boot = false;
+
 	if (ret) {
+		di->power_cable_boot = true;
 		dev_err(di->dev, "Failed to config Bq27541\n");
 		return;
 	}
@@ -382,7 +387,9 @@ static void bq27541_hw_config(struct work_struct *work)
 
 	dev_info(di->dev, "DEVICE_TYPE is 0x%02X, FIRMWARE_VERSION is 0x%02X\n",
 			type, fw_ver);
-	dev_info(di->dev, "Complete bq27541 configuration 0x%02X\n", flags);
+	dev_info(di->dev, "Complete bq27541 configuration 0x%02X, power_cable_boot = %d\n", 
+			flags, di->power_cable_boot);
+
 }
 
 static int bq27541_read_i2c(u8 reg, int *rt_value, int b_single,
@@ -523,6 +530,7 @@ static struct platform_device this_device = {
 #endif
 
 #define	BATT_POLLING_TIME		(10 * HZ)
+#define POWER_SUPPLY_BOOT_CAPACITY	100
 
 int battery_mvolts;
 int battery_capacity;
@@ -534,7 +542,11 @@ static void msm_battery_update_psy_status(void)
 	
 	battery_mvolts = bq27541_get_battery_mvolts();
 	udelay(100);
-	battery_capacity = bq27541_get_battery_capacity();
+
+	if(!(bq27541_di->power_cable_boot))
+		battery_capacity = bq27541_get_battery_capacity();
+	else
+		battery_capacity = POWER_SUPPLY_BOOT_CAPACITY;
 	udelay(100);
 	battery_temperature = bq27541_get_battery_temperature();
 	udelay(100);
