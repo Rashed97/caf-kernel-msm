@@ -588,13 +588,13 @@ static int __devinit mpu3050_probe(struct i2c_client *client,
 	if (ret < 0) {
 		dev_err(&client->dev, "failed to detect device\n");
 		error = -ENXIO;
-		goto err_free_mem;
+		goto err_disable_power;
 	}
 
 	if (ret != MPU3050_CHIP_ID) {
 		dev_err(&client->dev, "unsupported chip id\n");
 		error = -ENXIO;
-		goto err_free_mem;
+		goto err_disable_power;
 	}
 
 	idev->name = "gyro";
@@ -686,6 +686,8 @@ err_free_gpio:
 		gpio_free(sensor->platform_data->gpio_int);
 err_pm_set_suspended:
 	pm_runtime_set_suspended(&client->dev);
+err_disable_power:
+	mpu3050_set_power_mode(client, 0);
 err_free_mem:
 	input_free_device(idev);
 	kfree(sensor);
