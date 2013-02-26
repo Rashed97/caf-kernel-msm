@@ -164,6 +164,7 @@ static void pm8917_gpio_set_backlight(int bl_level)
  * available, replace mipi_dsi_cdp_panel_power with
  * appropriate function.
  */
+#define VPH_PWR_EN 56
 #define DISP_RST_GPIO 58
 #define DSI_LVDS_PWR_GPIO 7
 #define BACKLIGHT_PWR 8
@@ -310,6 +311,13 @@ static int mipi_dsi_cdp_panel_power(int on)
 				return -1;
 			}
 			gpio_direction_output(PANEL_UD, 0);
+			rc = gpio_request(VPH_PWR_EN, "VPH PWR EN");
+			if (rc) {
+				pr_err("%s.failed to get VPH PWR EN=%d.\n",
+						__func__, VPH_PWR_EN);
+				return -1;
+			}
+			gpio_direction_output(VPH_PWR_EN, 0);
 		}
 		rc = gpio_request(BACKLIGHT_EN, "backlight_en");
 		if (rc) {
@@ -375,6 +383,8 @@ static int mipi_dsi_cdp_panel_power(int on)
 			usleep(20);
 			gpio_direction_output(PANEL_UD, 0);
 			usleep(20);
+			gpio_direction_output(VPH_PWR_EN, 1);
+			usleep(20);
 		}
 		gpio_direction_output(DSI_LVDS_PWR_GPIO, 1);
 		usleep(10);
@@ -393,6 +403,7 @@ static int mipi_dsi_cdp_panel_power(int on)
 		if (machine_is_msm8x30_type1()) {
 			gpio_direction_output(PANEL_LR, 0);
 			gpio_direction_output(PANEL_UD, 0);
+			gpio_direction_output(VPH_PWR_EN, 0);
 		}
 		gpio_direction_output(DSI_LVDS_PWR_GPIO, 0);
 		gpio_set_value(DISP_RST_GPIO, 0);
