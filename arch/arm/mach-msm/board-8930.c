@@ -2129,26 +2129,41 @@ static struct i2c_board_info mxt_device_info_8930[] __initdata = {
 #define CHG_HC_EN				150
 #define CHG_INOK				55
 #define CFG_PIN_EN_CTRL_ACTIVE_LOW		0x60
-
+static struct regulator *regulator_lvs2;
+static struct regulator *regulator_lvs1;
 
 static void smb_init_power(bool on)
 {
 
 	pr_debug("***%s***on=%d\n", __FUNCTION__, on);
 
+	regulator_lvs2= regulator_get(NULL, "8038_lvs2");
+	msleep(10);
+	regulator_lvs1= regulator_get(NULL, "8038_lvs1");
+	msleep(10);
 
 	if (on) {	
-
+		regulator_enable(regulator_lvs2);
+		msleep(10);
+		regulator_enable(regulator_lvs1);
+		msleep(10);
 	}
 	else{
-
+		
+		regulator_disable(regulator_lvs2);
+		msleep(10);
+		regulator_disable(regulator_lvs1);
+		msleep(10);
 	}
 
+	if (gpio_request(CHG_HC_EN, "CHG_HC_EN")) {
+		pr_err("%s.failed to get smb347_IRQ=%d.\n",
+		__FUNCTION__, CHG_HC_EN);
+	}
 	if (gpio_request(CHG_INOK, "CHG_INOK")) {
 		pr_err("%s.failed to get smb347_SYSOK=%d.\n",
 		__FUNCTION__, CHG_INOK);
 	}
-
 }
 
 static void smb_enable_charging(bool on)
@@ -2292,37 +2307,6 @@ static int synaptics_ts_power_on(bool on)
         regulator_bulk_enable(ARRAY_SIZE(regs_ts), regs_ts) :
         regulator_bulk_disable(ARRAY_SIZE(regs_ts), regs_ts);
 
-    if (!on) {
-		
-        gpio_tlmm_config(GPIO_CFG(11, 0, GPIO_CFG_INPUT,
-			GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
-
-        gpio_tlmm_config(GPIO_CFG(52, 0, GPIO_CFG_INPUT,
-			GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
-
-	gpio_direction_output(2, 0);
-	gpio_direction_output(3, 0);
-	gpio_direction_output(4, 0);
-	gpio_direction_output(5, 0);
-	gpio_direction_output(54, 0);
-	gpio_direction_output(75, 0);
-	gpio_direction_output(76, 0);
-	gpio_direction_output(107, 0);
-	//gpio_direction_output(TP_ATTN, 0);
-	//gpio_direction_output(TP_RESET, 0);
-	//gpio_direction_output(101, 0);
-	printk("DAWEI*********************************************************\n");
-    }
-    else{
-
-    gpio_tlmm_config(GPIO_CFG(11, 0, GPIO_CFG_INPUT,
-			GPIO_CFG_PULL_UP, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
-
-    gpio_tlmm_config(GPIO_CFG(52, 0, GPIO_CFG_INPUT,
-			GPIO_CFG_PULL_UP, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
-
-    }
-
     if (retval)
         pr_err("%s: could not %sable regulators: %d\n",
                 __func__, on ? "en" : "dis", retval);
@@ -2376,13 +2360,6 @@ static int synaptics_platform_init(struct device *dev)
                 __func__, TP_RESET);
         goto free_tp_hardware_reset;
     }
-
-    gpio_tlmm_config(GPIO_CFG(11, 0, GPIO_CFG_INPUT,
-			GPIO_CFG_PULL_UP, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
-
-    gpio_tlmm_config(GPIO_CFG(52, 0, GPIO_CFG_INPUT,
-			GPIO_CFG_PULL_UP, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
-
     return 0;
 
 free_tp_hardware_reset:

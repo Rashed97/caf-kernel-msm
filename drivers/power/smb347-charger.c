@@ -22,8 +22,6 @@
 #include <linux/power_supply.h>
 #include <linux/power/smb347-charger.h>
 #include <linux/seq_file.h>
-#include <linux/earlysuspend.h>
-#include <linux/wakelock.h>
 
 /*
  * Configuration registers. These are mirrored to volatile RAM and can be
@@ -148,7 +146,6 @@ struct smb347_charger {
 	struct dentry		*dentry;
 	const struct 		smb347_charger_platform_data *pdata;
 	int			charger_type_flags;
-	struct			early_suspend early_suspend;
 };
 
 /* Fast charge current in uA */
@@ -206,19 +203,6 @@ static const unsigned int ccc_tbl[] = {
 };
 
 struct smb347_charger *the_chip;
-static struct wake_lock smb_lock;
-
-#ifdef CONFIG_HAS_EARLYSUSPEND
-void smb347_early_suspend(struct early_suspend *h)
-{
-	pr_debug("%s: enter\n", __func__);	
-}
-
-void smb347_late_resume(struct early_suspend *h)
-{
-	pr_debug("%s: enter\n", __func__);
-}
-#endif
 
 /* USB calls these to tell us how much max usb current the system can draw */
 void smb347_charger_vbus_draw(unsigned int mA)
@@ -229,12 +213,10 @@ void smb347_charger_vbus_draw(unsigned int mA)
 	if (mA == IDEV_CHG_MIN){
 		the_chip->charger_type_flags = POWER_SUPPLY_CHARGER_USB;
 		power_supply_changed(&the_chip->usb);
-		wake_lock(&smb_lock);
 	}
 	else if (mA == IDEV_CHG_MAX){
 		the_chip->charger_type_flags = POWER_SUPPLY_CHARGER_AC;
 		power_supply_changed(&the_chip->mains);
-		wake_lock(&smb_lock);
 	}
 	else{
 		charge = pm8921_is_usb_chg_plugged_in();
@@ -242,7 +224,6 @@ void smb347_charger_vbus_draw(unsigned int mA)
 			charge = 0;
 
 		if (!charge){
-				wake_unlock(&smb_lock);
 				the_chip->charger_type_flags = POWER_SUPPLY_CHARGER_REMOVE;
 				power_supply_changed(&the_chip->battery);
 		}
@@ -1207,7 +1188,7 @@ static int smb347_battery_get_property(struct power_supply *psy,
 		break;
 
 	case POWER_SUPPLY_PROP_CAPACITY:
-		val->intval = 100;//battery_capacity;
+		val->intval = battery_capacity;
 		break;
 
 	case POWER_SUPPLY_PROP_TEMP:
@@ -1333,8 +1314,6 @@ static void smb347_debugfs_init(void)
 
 }
 
-
-
 static int smb347_probe(struct i2c_client *client,
 			const struct i2c_device_id *id)
 {
@@ -1422,19 +1401,10 @@ static int smb347_probe(struct i2c_client *client,
 		}
 	}
 
-#ifdef CONFIG_HAS_EARLYSUSPEND
-	smb->early_suspend.level = EARLY_SUSPEND_LEVEL_STOP_DRAWING;
-	smb->early_suspend.suspend = smb347_early_suspend;
-	smb->early_suspend.resume = smb347_late_resume;
-	register_early_suspend(&smb->early_suspend);
-#endif
-
 	smb->dentry = debugfs_create_file("smb347-regs", S_IRUSR, NULL, smb,
 					  &smb347_debugfs_fops);
 	
 	smb347_debugfs_init();
-
-	wake_lock_init(&smb_lock, WAKE_LOCK_SUSPEND, "smb_lock");
 
 	return 0;
 }
