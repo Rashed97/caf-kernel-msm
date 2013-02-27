@@ -1810,6 +1810,9 @@ flash_prog_mode:
 				return retval;
 		}
 	}
+	if (status.flash_prog == 1) {
+		retval = synaptics_rmi4_reset_device(rmi4_data);
+	}
 
 	return 0;
 }
@@ -1890,6 +1893,7 @@ static void synaptics_rmi4_detection_work(struct work_struct *work)
 				exp_fhandler->inserted = true;
 			} else if ((exp_fhandler->func_init == NULL) &&
 					(exp_fhandler->inserted == true)) {
+				exp_fhandler->inserted = false;
 				exp_fhandler->func_remove(rmi4_data);
 				list_del(&exp_fhandler->link);
 				kfree(exp_fhandler);
@@ -2456,6 +2460,8 @@ static int synaptics_rmi4_suspend(struct device *dev)
 
 	if (platform_data->regulator_en && platform_data->power_on)
         platform_data->power_on(false);
+
+	platform_data->free_gpios();
 	return 0;
 }
 
@@ -2474,8 +2480,14 @@ static int synaptics_rmi4_resume(struct device *dev)
 	struct synaptics_rmi4_data *rmi4_data = dev_get_drvdata(dev);
 	const struct synaptics_dsx_platform_data *platform_data =
 			rmi4_data->board;
+	int retval;
 
     printk(KERN_EMERG "%s %d %s\n", __func__, __LINE__, "");
+
+	retval = platform_data->request_gpios();
+	if (retval){
+		printk(KERN_EMERG "11111111111111111111");
+	}
 
 	if (platform_data->regulator_en && platform_data->power_on)
         platform_data->power_on(true);
@@ -2496,6 +2508,7 @@ static const struct dev_pm_ops synaptics_rmi4_dev_pm_ops = {
 static const struct i2c_device_id synaptics_rmi4_id_table[] = {
 	{"synaptics_7300", 0},
 	{"synaptics_7020", 1},
+	{"synaptics_3202", 2},
 	{},
 };
 MODULE_DEVICE_TABLE(i2c, synaptics_rmi4_id_table);
