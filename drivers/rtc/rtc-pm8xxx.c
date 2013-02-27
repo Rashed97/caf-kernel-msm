@@ -294,6 +294,7 @@ pm8xxx_rtc_read_alarm(struct device *dev, struct rtc_wkalrm *alarm)
 {
 	int rc;
 	u8 value[4];
+	u8 enabled;
 	unsigned long secs;
 	struct pm8xxx_rtc *rtc_dd = dev_get_drvdata(dev);
 
@@ -319,6 +320,14 @@ pm8xxx_rtc_read_alarm(struct device *dev, struct rtc_wkalrm *alarm)
 		alarm->time.tm_hour, alarm->time.tm_min,
 				alarm->time.tm_sec, alarm->time.tm_mday,
 				alarm->time.tm_mon, alarm->time.tm_year);
+
+	rc = pm8xxx_read_wrapper(rtc_dd, &enabled, rtc_dd->rtc_base, 1);
+	if (rc < 0) {
+		dev_err(dev, "RTC alarm time read failed\n");
+		return rc;
+	}
+	if (enabled == 131)
+		alarm->enabled = 1;
 
 	return 0;
 }
