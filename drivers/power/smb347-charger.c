@@ -292,6 +292,7 @@ void update_charger_type(struct smb347_charger *smb)
 {
 	int cfg_ret, cmd_ret;
 	const struct smb347_charger_platform_data *pdata = smb->pdata;
+	static bool charging_gpio = false;
 
 	cfg_ret = smb347_read(smb, CFG_PIN);
 	cfg_ret &= ~CFG_PIN_EN_CTRL_MASK;
@@ -307,13 +308,20 @@ void update_charger_type(struct smb347_charger *smb)
 		cfg_ret |= CFG_PIN_EN_CTRL_USB_HC;
 		cfg_ret |= CFG_PIN_EN_CTRL_ACTIVE_LOW;
 		cmd_ret &= ~CMD_B_HC_ENABLE;
-		pdata->enable_charging(1);
+
+		if (charging_gpio == false){
+			pdata->enable_charging(1);
+			charging_gpio = true;
+		}
 	}
 	else{
 		cfg_ret |= CFG_PIN_EN_CTRL_USB_HC;
 		cfg_ret |= CFG_PIN_EN_CTRL_ACTIVE_LOW;
 		cmd_ret &= ~CMD_B_HC_ENABLE;
-		pdata->enable_charging(0);
+		if (charging_gpio == true){
+			pdata->enable_charging(0);
+			charging_gpio = false;
+		}
 	}
 
 	/* Disable Automatic Power Source Detection (APSD) interrupt. */
@@ -383,7 +391,8 @@ static int smb347_update_status(struct smb347_charger *smb)
 		ret = 1;
         }
 
-	update_charger_type(smb);
+	if (ret)
+		update_charger_type(smb);
 
 	mutex_unlock(&smb->lock);
 
@@ -1340,7 +1349,7 @@ void smb347_early_suspend(struct early_suspend *h)
 
 	pr_info("%s: enter\n", __func__);
 	
-	if(!((wakelock_smb_count) && (smb347_is_online(the_chip)))){
+	if(!((wakelock_smb_count) || (smb347_is_online(the_chip)))){
 		pdata->enable_power(0);
 		pr_info("power off smb347\n");
 	}
@@ -1352,7 +1361,7 @@ void smb347_late_resume(struct early_suspend *h)
 
 	pr_info("%s: enter\n", __func__);
 
-	if(!((wakelock_smb_count) && (smb347_is_online(the_chip)))){
+	if(!((wakelock_smb_count) || (smb347_is_online(the_chip)))){
 		pdata->enable_power(1);
 		smb347_hw_init(the_chip);
 		pr_info("power on smb347\n");
