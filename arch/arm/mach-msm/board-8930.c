@@ -2136,7 +2136,7 @@ static struct regulator *regulator_l9;
 static void smb_init_power(bool on)
 {
 
-	pr_debug("***%s***on=%d\n", __FUNCTION__, on);
+	pr_info("***%s***on=%d\n", __FUNCTION__, on);
 
 	if (on) {	
 		regulator_enable(regulator_lvs2);
@@ -2153,7 +2153,7 @@ static void smb_init_power(bool on)
 
 static void smb_enable_charging(bool on)
 {
-	pr_debug("***%s***on=%d\n", __FUNCTION__, on);
+	pr_info("***%s***on=%d\n", __FUNCTION__, on);
 
 	if (on) {
 		if (gpio_direction_output(CHG_HC_EN,1)){
@@ -2181,6 +2181,10 @@ static int smb347_init(struct device *dev)
 	if (gpio_request(CHG_INOK, "CHG_INOK"))
 		pr_err("%s.failed to get smb347_SYSOK=%d.\n",
 		__FUNCTION__, CHG_INOK);
+        if (gpio_request(CHG_HC_EN, "CHG_HC_EN"))
+                pr_err("%s.failed to get smb347_IRQ=%d.\n",
+                __FUNCTION__, CHG_HC_EN);
+
 	return 0;
 }
 
@@ -2193,10 +2197,10 @@ static struct smb347_charger_platform_data smb347_data = {
        .mains_current_limit=2000000,
        .usb_hc_current_limit=2000000,
        .chip_temp_threshold=120,
-       .soft_cold_temp_limit=5,
-       .soft_hot_temp_limit=55,
-       .hard_cold_temp_limit=0,
-       .hard_hot_temp_limit=60,
+       .soft_cold_temp_limit=10,
+       .soft_hot_temp_limit=50,
+       .hard_cold_temp_limit=5,
+       .hard_hot_temp_limit=55,
        .suspend_on_hard_temp_limit=1,
        .soft_temp_limit_compensation=SMB347_SOFT_TEMP_COMPENSATE_DEFAULT,
        .charge_current_compensation=250000,
