@@ -52,6 +52,10 @@ struct synaptics_dsx_platform_data {
     int (*power_on)(bool on);
 	struct synaptics_rmi_f1a_button_map *f1a_button_map;
 	void (*hardware_reset)(void);
+    int (*request_gpios)(void);
+    int (*request_regulator)(struct device *dev);
+    void (*free_gpios)(void);
+    void (*free_regulator)(void);
 };
 
 #endif
