@@ -576,7 +576,7 @@ static int alarm_suspend(struct platform_device *pdev, pm_message_t state)
 
 		rtc_time_to_tm(rtc_alarm_time, &rtc_alarm.time);
 		rtc_alarm.enabled = 1;
-		//rtc_set_alarm(alarm_rtc_dev, &rtc_alarm);
+		rtc_set_alarm(alarm_rtc_dev, &rtc_alarm);
 		rtc_read_time(alarm_rtc_dev, &rtc_current_rtc_time);
 		rtc_tm_to_time(&rtc_current_rtc_time, &rtc_current_time);
 		pr_alarm(SUSPEND,
@@ -587,7 +587,7 @@ static int alarm_suspend(struct platform_device *pdev, pm_message_t state)
 			pr_alarm(SUSPEND, "alarm about to go off\n");
 			memset(&rtc_alarm, 0, sizeof(rtc_alarm));
 			rtc_alarm.enabled = 0;
-			//rtc_set_alarm(alarm_rtc_dev, &rtc_alarm);
+			rtc_set_alarm(alarm_rtc_dev, &rtc_alarm);
 
 			spin_lock_irqsave(&alarm_slock, flags);
 			suspended = false;
