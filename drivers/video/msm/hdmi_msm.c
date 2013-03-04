@@ -93,9 +93,9 @@ static void hdmi_msm_hpd_off(void);
 static boolean hdmi_msm_is_dvi_mode(void);
 
 static int hdmi_msm_hpd_feature(int on);
+static int _hdmi_online = TRUE;
 
 #ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL_CEC_SUPPORT
-
 static void hdmi_msm_cec_line_latch_detect(void);
 
 #ifdef TOGGLE_CEC_HARDWARE_FSM
@@ -139,7 +139,6 @@ static boolean msg_recv_complete = TRUE;
 #define HDMI_MSM_CEC_RETRANSMIT_ENABLE		BIT(0)
 
 #define HDMI_MSM_CEC_WR_DATA_DATA(___d)		(((___d)&0xFF) << 8)
-
 void hdmi_msm_cec_init(void)
 {
 	/* 0x02A8 CEC_REFTIMER */
@@ -264,7 +263,7 @@ void hdmi_msm_cec_msg_send(struct hdmi_msm_cec_msg *msg)
 	for (i = 0; i < msg->frame_size - 1; i++)
 		HDMI_OUTP(0x0290,
 			HDMI_MSM_CEC_WR_DATA_DATA(msg->operand[i])
-			| (msg->recvr_id == 15 ? BIT(0) : 0));
+      | (msg->recvr_id == 15 ? BIT(0) : 0));
 
 	for (; i < 14; i++)
 		HDMI_OUTP(0x0290,
@@ -4561,10 +4560,10 @@ static ssize_t hdmi_msm_online_show(struct device *dev,
 {
 	//struct hdmi_msm_panel_data *led = dev_get_drvdata(dev);
     ssize_t ret = 0;
-    int hdmi_online = 1;
-
+    int hdmi_online = 0;
+    hdmi_online = _hdmi_online;
     ret = sprintf(buf,"%d",hdmi_online);
-	return ret;
+        return ret;
 }
 
 static ssize_t hdmi_msm_online_store(struct device *dev,
@@ -4574,14 +4573,14 @@ static ssize_t hdmi_msm_online_store(struct device *dev,
     int hdmi_online = 0;
 
     sscanf(buf, "%d", &hdmi_online);
-
-    hdmi_msm_hpd_feature(hdmi_online);
+    _hdmi_online =  hdmi_online;
+    hdmi_msm_hpd_feature(_hdmi_online);
     //hdmi_msm_isr(0,NULL);
-    DEV_ERR("%s: hdmi_online==%d\n",__func__,hdmi_online);
+    //DEV_ERR("%s: hdmi_online==%d\n",__func__,_hdmi_online);
 	return count;
 }
 
-static DEVICE_ATTR(online, 0664, hdmi_msm_online_show, hdmi_msm_online_store);
+static DEVICE_ATTR(online, 0777, hdmi_msm_online_show, hdmi_msm_online_store);
 
 static int __devinit hdmi_msm_probe(struct platform_device *pdev)
 {
