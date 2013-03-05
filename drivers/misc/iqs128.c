@@ -26,6 +26,7 @@ struct iqs128_data {
 	struct iqs128_platform_data *pdata;
 	struct input_dev *input;
 	struct work_struct work;
+	int enable;
 };
 
 enum {
@@ -33,6 +34,45 @@ enum {
 };
 static int debug_mask = 0;
 module_param_named(debug_mask, debug_mask, int, S_IRUGO | S_IWUSR | S_IWGRP);
+
+static ssize_t iqs128_enable_store(struct device *dev,
+		struct device_attribute *attr,
+		const char *buf, size_t count)
+{
+	int i;
+	int error;
+	unsigned long data;
+	struct iqs128_data *iqs128_data = dev_get_drvdata(dev);
+
+	error = strict_strtoul(buf, 10, &data);
+	if (error)
+		return error;
+
+	if (data == 1 &&  iqs128_data->enable == 0) {
+		for (i = 0; i < iqs128_data->pdata->num_data; i++) {
+			enable_irq(iqs128_data->pdata->gpio_data[i].irq);
+		}
+		iqs128_data->enable = 1;
+	} else if (data == 0 &&  iqs128_data->enable == 1) {
+		for (i = 0; i < iqs128_data->pdata->num_data; i++) {
+			disable_irq(iqs128_data->pdata->gpio_data[i].irq);
+		}
+		iqs128_data->enable = 0;
+		input_report_abs(iqs128_data->input, EVENT_TYPE_RF, 0);
+		input_report_abs(iqs128_data->input, EVENT_TYPE_WIFI, 0);
+		input_sync(iqs128_data->input);
+	}
+
+	return count;
+}
+
+static ssize_t iqs128_enable_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct iqs128_data *iqs128_data = dev_get_drvdata(dev);
+
+	return sprintf(buf , "%d\n", iqs128_data->enable);
+}
 
 static ssize_t iqs128_status_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
@@ -54,11 +94,14 @@ static ssize_t iqs128_status_show(struct device *dev,
 	return size;
 }
 
+static DEVICE_ATTR(enable, S_IRUGO | S_IWUSR | S_IWGRP,
+		iqs128_enable_show, iqs128_enable_store);
 static DEVICE_ATTR(status, S_IRUGO | S_IWUSR | S_IWGRP,
 		iqs128_status_show, NULL);
 
 static struct attribute *iqs128_attributes[] = {
 	&dev_attr_status.attr,
+	&dev_attr_enable.attr,
 	NULL
 };
 
@@ -214,6 +257,7 @@ static int __devinit iqs128_probe(struct platform_device *pdev)
 		}
 	}
 
+	iqs128_data->enable = 1;
 	INIT_WORK(&iqs128_data->work, iqs128_work_func);
 
 	return 0;
