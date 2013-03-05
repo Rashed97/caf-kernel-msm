@@ -522,8 +522,8 @@ static struct msm_bus_vectors mdp_ui_vectors[] = {
 	{
 		.src = MSM_BUS_MASTER_MDP_PORT0,
 		.dst = MSM_BUS_SLAVE_EBI_CH0,
-		.ab = 216000000 * 2,
-		.ib = 270000000 * 2,
+		.ab = 334080000 * 2,
+		.ib = 417600000 * 2,
 	},
 };
 
