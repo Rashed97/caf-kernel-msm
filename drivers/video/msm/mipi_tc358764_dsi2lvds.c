@@ -626,7 +626,7 @@ static int mipi_d2l_lcd_on(struct platform_device *pdev)
 	d2l_pwm_freq_hz = (1 * 1000);
 
 	if (bl_level == 0)
-		bl_level = PWM_LEVEL * 2 / 3 ; /* Default ON value */
+		bl_level = PWM_LEVEL * 1 / 4 ; /* Default ON value */
 
 	/* Set backlight via PWM */
 	if (bl_pwm) {
