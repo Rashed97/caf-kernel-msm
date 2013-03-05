@@ -1042,20 +1042,6 @@ static int diagchar_write(struct file *file, const char __user *buf,
 	void *buf_copy = NULL;
 	unsigned int payload_size;
 
-        printk(KERN_INFO "start diagchar_write");
-        /* Get the packet type F3/log/event/Pkt response */
-        err = copy_from_user((&pkt_type), buf, 4);
-        /* First 4 bytes indicate the type of payload - ignore these */
-        payload_size = count - 4;
-
-        if (pkt_type == DIAG_NV_WRITE){
-
-                err = copy_from_user(driver->user_space_data, buf + 4, payload_size);
-                diag_process_hdlc((void *)(driver->user_space_data), payload_size);
-
-                return 0;
-        }
-
 #ifdef CONFIG_DIAG_OVER_USB
 	if (((driver->logging_mode == USB_MODE) && (!driver->usb_connected)) ||
 				(driver->logging_mode == NO_LOGGING_MODE)) {
@@ -1071,6 +1057,15 @@ static int diagchar_write(struct file *file, const char __user *buf,
 		return -EBADMSG;
 	}
 	payload_size = count - 4;
+
+	if (pkt_type == DIAG_NV_WRITE){
+
+                err = copy_from_user(driver->user_space_data, buf + 4, payload_size);
+                diag_process_hdlc((void *)(driver->user_space_data), payload_size);
+
+                return 0;
+        }
+
 	if (payload_size > USER_SPACE_DATA) {
 		pr_err("diag: Dropping packet, packet payload size crosses 8KB limit. Current payload size %d\n",
 				payload_size);
