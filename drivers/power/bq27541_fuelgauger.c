@@ -543,6 +543,8 @@ static void msm_battery_update_psy_status(void)
 	battery_mvolts = bq27541_get_battery_mvolts();
 	udelay(100);
 
+	regulator_enable(regulator_lvs2);
+
 	if(!(bq27541_di->power_cable_boot))
 		battery_capacity = bq27541_get_battery_capacity();
 	else
@@ -552,6 +554,7 @@ static void msm_battery_update_psy_status(void)
 	udelay(100);
 	charge_current = (short) bq27541_get_battery_current();
 	udelay(100);
+	regulator_disable(regulator_lvs2);
 
 	printk("%s mvolts=%d capacity=%d temperature=%d charge_current=%d\n", __FUNCTION__,
 		(int) battery_mvolts, (int) battery_capacity, (int) battery_temperature, (short) charge_current);
@@ -624,6 +627,8 @@ static int bq27541_battery_probe(struct i2c_client *client,
 	} else
 		goto batt_failed_4;
 #endif
+
+	regulator_lvs2 = regulator_get(di->dev, "bq27541_lvs2");
 
 	if (retval) {
 		dev_err(&client->dev, "failed to setup bq27541\n");
