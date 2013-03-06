@@ -2127,7 +2127,9 @@ static struct i2c_board_info mxt_device_info_8930[] __initdata = {
 
 #ifdef CONFIG_CHARGER_SMB347
 #define CHG_HC_EN				150
+#define CHG_STAT				6
 #define CHG_INOK				55
+#define CHG_VCHG				90
 #define CFG_PIN_EN_CTRL_ACTIVE_LOW		0x60
 static struct regulator *regulator_lvs2;
 static struct regulator *regulator_lvs1;
@@ -2142,6 +2144,7 @@ static void smb_init_power(bool on)
 		regulator_enable(regulator_lvs2);
 		regulator_enable(regulator_lvs1);
 		regulator_enable(regulator_l9);
+		msleep(500);
 	}
 	else{
 		regulator_disable(regulator_lvs2);
@@ -2160,6 +2163,16 @@ static void smb_enable_charging(bool on)
 			pr_err("%s.failed to set smb347_cur_selector=%d.\n",
 			__FUNCTION__, CHG_HC_EN);
 		}
+
+		gpio_tlmm_config(GPIO_CFG(CHG_STAT, 0, GPIO_CFG_INPUT,
+                       GPIO_CFG_PULL_UP, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
+
+		gpio_tlmm_config(GPIO_CFG(CHG_INOK, 0, GPIO_CFG_INPUT,
+                       GPIO_CFG_PULL_UP, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
+
+		gpio_tlmm_config(GPIO_CFG(CHG_VCHG, 0, GPIO_CFG_INPUT,
+                       GPIO_CFG_PULL_UP, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
+
 	}
 	else{
 		if (gpio_direction_output(CHG_HC_EN,0)){
@@ -2167,6 +2180,12 @@ static void smb_enable_charging(bool on)
 			__FUNCTION__, CHG_HC_EN);
 		}
 
+		gpio_tlmm_config(GPIO_CFG(CHG_STAT, 0, GPIO_CFG_INPUT,
+                       GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
+	        gpio_tlmm_config(GPIO_CFG(CHG_INOK, 0, GPIO_CFG_INPUT,
+                       GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
+		gpio_tlmm_config(GPIO_CFG(CHG_VCHG, 0, GPIO_CFG_INPUT,
+                       GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
 	}
 }
 
@@ -2178,12 +2197,28 @@ static int smb347_init(struct device *dev)
 	regulator_l9   = regulator_get(dev, "smb_l9");
 
 	smb_init_power(1);
+
+	if (gpio_request(CHG_STAT, "CHG_STAT"))
+		pr_err("%s.failed to get smb347_CHG_STAT=%d.\n",
+		__FUNCTION__, CHG_INOK);
 	if (gpio_request(CHG_INOK, "CHG_INOK"))
 		pr_err("%s.failed to get smb347_SYSOK=%d.\n",
 		__FUNCTION__, CHG_INOK);
         if (gpio_request(CHG_HC_EN, "CHG_HC_EN"))
-                pr_err("%s.failed to get smb347_IRQ=%d.\n",
+                pr_err("%s.failed to get smb347_CHG_HC_EN=%d.\n",
                 __FUNCTION__, CHG_HC_EN);
+        if (gpio_request(CHG_VCHG, "CHG_VCHG"))
+                pr_err("%s.failed to get smb347_CHG_VCHG=%d.\n",
+                __FUNCTION__, CHG_VCHG);
+
+	gpio_tlmm_config(GPIO_CFG(CHG_STAT, 0, GPIO_CFG_INPUT,
+                       GPIO_CFG_PULL_UP, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
+
+	gpio_tlmm_config(GPIO_CFG(CHG_INOK, 0, GPIO_CFG_INPUT,
+                       GPIO_CFG_PULL_UP, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
+
+	gpio_tlmm_config(GPIO_CFG(CHG_VCHG, 0, GPIO_CFG_INPUT,
+                       GPIO_CFG_PULL_UP, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
 
 	return 0;
 }

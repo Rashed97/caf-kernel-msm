@@ -149,6 +149,7 @@ struct smb347_charger {
 	bool			mains_online;
 	bool			usb_online;
 	bool			charging_enabled;
+	bool			is_suspend;
 	struct dentry		*dentry;
 	const struct 		smb347_charger_platform_data *pdata;
 	int			charger_type_flags;
@@ -271,6 +272,7 @@ static int current_to_hw(const unsigned int *tbl, size_t size, unsigned int val)
 static int smb347_read(struct smb347_charger *smb, u8 reg)
 {
 	int ret;
+
 	ret = i2c_smbus_read_byte_data(smb->client, reg);
 	if (ret < 0)
 		dev_warn(&smb->client->dev, "failed to read reg 0x%x: %d\n",
@@ -281,6 +283,7 @@ static int smb347_read(struct smb347_charger *smb, u8 reg)
 static int smb347_write(struct smb347_charger *smb, u8 reg, u8 val)
 {
 	int ret;
+
 	ret = i2c_smbus_write_byte_data(smb->client, reg, val);
 	if (ret < 0)
 		dev_warn(&smb->client->dev, "failed to write reg 0x%x: %d\n",
@@ -1134,7 +1137,14 @@ static int smb347_battery_get_property(struct power_supply *psy,
 	const struct smb347_charger_platform_data *pdata = smb->pdata;
 	int ret;
 
+	if(smb->is_suspend)
+		pdata->enable_power(1);
+
 	ret = smb347_update_status(smb);
+
+	if(smb->is_suspend)
+		pdata->enable_power(0);
+
 	if (ret < 0)
 		return ret;
 
@@ -1351,6 +1361,7 @@ void smb347_early_suspend(struct early_suspend *h)
 	
 	if(!((wakelock_smb_count) || (smb347_is_online(the_chip)))){
 		pdata->enable_power(0);
+		the_chip->is_suspend = true;
 		pr_info("power off smb347\n");
 	}
 }
@@ -1364,6 +1375,7 @@ void smb347_late_resume(struct early_suspend *h)
 	if(!((wakelock_smb_count) || (smb347_is_online(the_chip)))){
 		pdata->enable_power(1);
 		smb347_hw_init(the_chip);
+		the_chip->is_suspend = false;
 		pr_info("power on smb347\n");
 	}
 }
@@ -1457,7 +1469,7 @@ static int smb347_probe(struct i2c_client *client,
 	}
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
-	smb->early_suspend.level = EARLY_SUSPEND_LEVEL_STOP_DRAWING;
+	smb->early_suspend.level = EARLY_SUSPEND_LEVEL_DISABLE_FB;
 	smb->early_suspend.suspend = smb347_early_suspend;
 	smb->early_suspend.resume = smb347_late_resume;
 	register_early_suspend(&smb->early_suspend);
@@ -1466,6 +1478,8 @@ static int smb347_probe(struct i2c_client *client,
 	smb->dentry = debugfs_create_file("smb347-regs", S_IRUSR, NULL, smb,
 					  &smb347_debugfs_fops);
 	
+	smb->is_suspend=false;
+
 	smb347_debugfs_init();
 
 	wake_lock_init(&smb_lock, WAKE_LOCK_SUSPEND, "smb_lock");

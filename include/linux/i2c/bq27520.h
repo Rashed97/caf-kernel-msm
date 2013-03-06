@@ -23,4 +23,5 @@ struct bq27520_platform_data {
 	int enable_dlog; /* if enable on-chip coulomb counter data logger */
 };
 
+static struct regulator *regulator_lvs2;
 #endif /* __LINUX_BQ27520_H */
