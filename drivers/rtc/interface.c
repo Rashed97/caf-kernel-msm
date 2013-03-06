@@ -16,6 +16,8 @@
 #include <linux/module.h>
 #include <linux/log2.h>
 #include <linux/workqueue.h>
+#include <linux/reboot.h>
+#include <mach/msm_smsm.h>
 
 static int rtc_timer_enqueue(struct rtc_device *rtc, struct rtc_timer *timer);
 static void rtc_timer_remove(struct rtc_device *rtc, struct rtc_timer *timer);
@@ -380,11 +382,24 @@ int rtc_set_alarm(struct rtc_device *rtc, struct rtc_wkalrm *alarm)
 }
 EXPORT_SYMBOL_GPL(rtc_set_alarm);
 
+extern int power_on_mode;
+
+static struct timer_list reboot_timer;
+
+static void reboot_fn(unsigned long arg)
+{
+	machine_restart("reboot");
+}
+
 /* Called once per device from rtc_device_register */
 int rtc_initialize_alarm(struct rtc_device *rtc, struct rtc_wkalrm *alarm)
 {
 	int err;
 	struct rtc_time now;
+	unsigned long now_time, alarm_time;
+	unsigned long expires = 0;
+	unsigned int boot_reason;
+	unsigned smem_size;
 
 	err = rtc_valid_tm(&alarm->time);
 	if (err != 0)
@@ -408,6 +423,18 @@ int rtc_initialize_alarm(struct rtc_device *rtc, struct rtc_wkalrm *alarm)
 		rtc->aie_timer.enabled = 1;
 		timerqueue_add(&rtc->timerqueue, &rtc->aie_timer.node);
 	}
+
+	rtc_tm_to_time(&now, &now_time);
+	rtc_tm_to_time(&alarm->time, &alarm_time);
+	expires = alarm_time - now_time;
+	boot_reason = *(unsigned int *)(smem_get_entry(SMEM_POWER_ON_STATUS_INFO, &smem_size));
+	if(alarm->enabled && (expires > 0)  && (power_on_mode != 0x77665501) && (boot_reason == 0x20)) {
+		init_timer(&reboot_timer);
+		reboot_timer.function = reboot_fn;
+		reboot_timer.expires = jiffies + expires * HZ;
+		add_timer(&reboot_timer);
+	}
+
 	mutex_unlock(&rtc->ops_lock);
 	return err;
 }
