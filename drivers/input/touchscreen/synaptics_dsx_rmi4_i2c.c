@@ -2429,6 +2429,8 @@ static void synaptics_rmi4_late_resume(struct early_suspend *h)
 		synaptics_rmi4_irq_enable(rmi4_data, true);
 	}
 
+	synaptics_rmi4_reset_device(rmi4_data);
+
 	return;
 }
 #endif
