@@ -2144,7 +2144,6 @@ static void smb_init_power(bool on)
 		regulator_enable(regulator_lvs2);
 		regulator_enable(regulator_lvs1);
 		regulator_enable(regulator_l9);
-		msleep(500);
 	}
 	else{
 		regulator_disable(regulator_lvs2);
@@ -2163,29 +2162,12 @@ static void smb_enable_charging(bool on)
 			pr_err("%s.failed to set smb347_cur_selector=%d.\n",
 			__FUNCTION__, CHG_HC_EN);
 		}
-
-		gpio_tlmm_config(GPIO_CFG(CHG_STAT, 0, GPIO_CFG_INPUT,
-                       GPIO_CFG_PULL_UP, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
-
-		gpio_tlmm_config(GPIO_CFG(CHG_INOK, 0, GPIO_CFG_INPUT,
-                       GPIO_CFG_PULL_UP, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
-
-		gpio_tlmm_config(GPIO_CFG(CHG_VCHG, 0, GPIO_CFG_INPUT,
-                       GPIO_CFG_PULL_UP, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
-
 	}
 	else{
 		if (gpio_direction_output(CHG_HC_EN,0)){
 			pr_err("%s.failed to set smb347_cur_selector=%d.\n",
 			__FUNCTION__, CHG_HC_EN);
 		}
-
-		gpio_tlmm_config(GPIO_CFG(CHG_STAT, 0, GPIO_CFG_INPUT,
-                       GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
-	        gpio_tlmm_config(GPIO_CFG(CHG_INOK, 0, GPIO_CFG_INPUT,
-                       GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
-		gpio_tlmm_config(GPIO_CFG(CHG_VCHG, 0, GPIO_CFG_INPUT,
-                       GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
 	}
 }
 
@@ -2198,9 +2180,6 @@ static int smb347_init(struct device *dev)
 
 	smb_init_power(1);
 
-	if (gpio_request(CHG_STAT, "CHG_STAT"))
-		pr_err("%s.failed to get smb347_CHG_STAT=%d.\n",
-		__FUNCTION__, CHG_INOK);
 	if (gpio_request(CHG_INOK, "CHG_INOK"))
 		pr_err("%s.failed to get smb347_SYSOK=%d.\n",
 		__FUNCTION__, CHG_INOK);
@@ -2210,15 +2189,6 @@ static int smb347_init(struct device *dev)
         if (gpio_request(CHG_VCHG, "CHG_VCHG"))
                 pr_err("%s.failed to get smb347_CHG_VCHG=%d.\n",
                 __FUNCTION__, CHG_VCHG);
-
-	gpio_tlmm_config(GPIO_CFG(CHG_STAT, 0, GPIO_CFG_INPUT,
-                       GPIO_CFG_PULL_UP, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
-
-	gpio_tlmm_config(GPIO_CFG(CHG_INOK, 0, GPIO_CFG_INPUT,
-                       GPIO_CFG_PULL_UP, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
-
-	gpio_tlmm_config(GPIO_CFG(CHG_VCHG, 0, GPIO_CFG_INPUT,
-                       GPIO_CFG_PULL_UP, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
 
 	return 0;
 }
@@ -2237,8 +2207,8 @@ static struct smb347_charger_platform_data smb347_data = {
        .hard_cold_temp_limit=5,
        .hard_hot_temp_limit=55,
        .suspend_on_hard_temp_limit=1,
-       .soft_temp_limit_compensation=SMB347_SOFT_TEMP_COMPENSATE_DEFAULT,
-       .charge_current_compensation=250000,
+       .soft_temp_limit_compensation=SMB347_SOFT_TEMP_COMPENSATE_CURRENT,
+       .charge_current_compensation=1200000,
        .irq_gpio=6,
        .enable_control=CFG_PIN_EN_CTRL_ACTIVE_LOW,
        .use_mains=1,
