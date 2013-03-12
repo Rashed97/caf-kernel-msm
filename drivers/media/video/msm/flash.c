@@ -23,6 +23,8 @@
 #include <mach/gpio.h>
 #include "msm_camera_i2c.h"
 
+#define STROBE 10
+extern int flash_cnt;
 struct i2c_client *sx150x_client;
 struct timer_list timer_flash;
 static struct msm_camera_sensor_info *sensor_data;
@@ -419,10 +421,22 @@ error:
 			gpio_set_value_cansleep(external->led_flash_en, 1);
 			usleep_range(2000, 3000);
 			if (sc628a_client) {
+				flash_cnt++;
+				//printk(KERN_ERR "flash count = %d\n",flash_cnt);
+				if(flash_cnt >= STROBE){
+				//printk(KERN_ERR "flash strobe\n");
 				i2c_client.client = sc628a_client;
 				i2c_client.addr_type = MSM_CAMERA_I2C_BYTE_ADDR;
 				rc = msm_camera_i2c_write(&i2c_client, 0x02,
-					0x06, MSM_CAMERA_I2C_BYTE_DATA);
+					0x95, MSM_CAMERA_I2C_BYTE_DATA);//675mA
+				}
+				else{
+				//printk(KERN_ERR "flash torch\n");
+				i2c_client.client = sc628a_client;
+				i2c_client.addr_type = MSM_CAMERA_I2C_BYTE_ADDR;
+				rc = msm_camera_i2c_write(&i2c_client, 0x02,
+					0x06, MSM_CAMERA_I2C_BYTE_DATA);//150mA
+				}
 			}
 			if (tps61310_client) {
 				i2c_client.client = tps61310_client;
@@ -435,6 +449,7 @@ error:
 
 	case MSM_CAMERA_LED_HIGH:
 		if (sc628a_client || tps61310_client) {
+			//printk(KERN_ERR "flash high\n");
 			gpio_set_value_cansleep(external->led_en, 1);
 			gpio_set_value_cansleep(external->led_flash_en, 1);
 			usleep_range(2000, 3000);
@@ -442,7 +457,7 @@ error:
 				i2c_client.client = sc628a_client;
 				i2c_client.addr_type = MSM_CAMERA_I2C_BYTE_ADDR;
 				rc = msm_camera_i2c_write(&i2c_client, 0x02,
-					0x49, MSM_CAMERA_I2C_BYTE_DATA);
+					0x95, MSM_CAMERA_I2C_BYTE_DATA);
 			}
 			if (tps61310_client) {
 				i2c_client.client = tps61310_client;
