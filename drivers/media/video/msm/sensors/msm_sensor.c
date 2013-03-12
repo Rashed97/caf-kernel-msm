@@ -18,6 +18,8 @@
 #include "msm_camera_i2c_mux.h"
 
 /*=============================================================*/
+#define RESET 0
+extern int flash_cnt;
 void msm_sensor_adjust_frame_lines1(struct msm_sensor_ctrl_t *s_ctrl)
 {
 	uint16_t cur_line = 0;
@@ -1571,6 +1573,7 @@ int32_t msm_sensor_power_down(struct msm_sensor_ctrl_t *s_ctrl)
 {
 	struct msm_camera_sensor_info *data = s_ctrl->sensordata;
 	struct device *dev = NULL;
+	flash_cnt = RESET;
 	if (s_ctrl->sensor_device_type == MSM_SENSOR_PLATFORM_DEVICE)
 		dev = &s_ctrl->pdev->dev;
 	else

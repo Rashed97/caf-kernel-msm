@@ -16,6 +16,8 @@
 #define SENSOR_NAME "ov5647"
 #define PLATFORM_DRIVER_NAME "msm_camera_ov5647"
 #define ov5647_obj ov5647_##obj
+#define RESET 0
+int flash_cnt;
 
 static struct msm_sensor_ctrl_t ov5647_s_ctrl;
 
@@ -701,6 +703,7 @@ int32_t ov5647_sensor_power_up(struct msm_sensor_ctrl_t *s_ctrl)
 {
 	int32_t rc = 0;
 	struct msm_camera_sensor_info *info = NULL;
+	flash_cnt = RESET;
 	printk(KERN_ERR "%s\n",__func__);
 	info = s_ctrl->sensordata;
 //	gpio_direction_output(54, 1);
