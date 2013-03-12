@@ -44,6 +44,8 @@
 #define CFG_CURRENT_LIMIT_DC_MASK		0xf0
 #define CFG_CURRENT_LIMIT_DC_SHIFT		4
 #define CFG_CURRENT_LIMIT_USB_MASK		0x0f
+#define CFG_VARIOUS				0x01
+#define CFG_VARIOUS_VCHG			BIT(0)
 #define CFG_FLOAT_VOLTAGE			0x03
 #define CFG_FLOAT_VOLTAGE_THRESHOLD_MASK	0xc0
 #define CFG_FLOAT_VOLTAGE_THRESHOLD_SHIFT	6
@@ -291,11 +293,43 @@ static int smb347_write(struct smb347_charger *smb, u8 reg, u8 val)
 	return ret;
 }
 
+
+/*
+ * smb347_set_writable - enables/disables writing to non-volatile registers
+ * @smb: pointer to smb347 charger instance
+ *
+ * You can enable/disable writing to the non-volatile configuration
+ * registers by calling this function.
+ *
+ * Returns %0 on success and negative errno in case of failure.
+ */
+static int smb347_set_writable(struct smb347_charger *smb, bool writable)
+{
+	int ret;
+
+	ret = smb347_read(smb, CMD_A);
+	if (ret < 0)
+		return ret;
+
+	if (writable)
+		ret |= CMD_A_ALLOW_WRITE;
+	else
+		ret &= ~CMD_A_ALLOW_WRITE;
+
+	return smb347_write(smb, CMD_A, ret);
+}
+
 void update_charger_type(struct smb347_charger *smb)
 {
-	int cfg_ret, cmd_ret;
+	int ret, cfg_ret, cmd_ret;
 	const struct smb347_charger_platform_data *pdata = smb->pdata;
 	static bool charging_gpio = false;
+
+	if(smb->is_suspend){
+		ret = smb347_set_writable(smb, true);
+		if (ret < 0)
+			return;
+	}
 
 	cfg_ret = smb347_read(smb, CFG_PIN);
 	cfg_ret &= ~CFG_PIN_EN_CTRL_MASK;
@@ -770,31 +804,6 @@ static int smb347_set_temp_limits(struct smb347_charger *smb)
 	return ret;
 }
 
-/*
- * smb347_set_writable - enables/disables writing to non-volatile registers
- * @smb: pointer to smb347 charger instance
- *
- * You can enable/disable writing to the non-volatile configuration
- * registers by calling this function.
- *
- * Returns %0 on success and negative errno in case of failure.
- */
-static int smb347_set_writable(struct smb347_charger *smb, bool writable)
-{
-	int ret;
-
-	ret = smb347_read(smb, CMD_A);
-	if (ret < 0)
-		return ret;
-
-	if (writable)
-		ret |= CMD_A_ALLOW_WRITE;
-	else
-		ret &= ~CMD_A_ALLOW_WRITE;
-
-	return smb347_write(smb, CMD_A, ret);
-}
-
 static int smb347_hw_init(struct smb347_charger *smb)
 {
 	int ret;
@@ -807,6 +816,14 @@ static int smb347_hw_init(struct smb347_charger *smb)
 	 * Program the platform specific configuration values to the device
 	 * first.
 	 */
+	ret = smb347_read(smb, CFG_VARIOUS);
+	if (ret < 0)
+		goto fail;
+	ret &= ~CFG_VARIOUS_VCHG;
+	ret = smb347_write(smb, CFG_VARIOUS, ret);
+	if (ret < 0)
+		goto fail;
+
 	ret = smb347_set_charge_current(smb);
 	if (ret < 0)
 		goto fail;
@@ -883,8 +900,6 @@ static int smb347_hw_init(struct smb347_charger *smb)
 	ret = smb347_write(smb, CFG_PIN, ret);
 	if (ret < 0)
 		goto fail;
-
-	smb->charger_type_flags = POWER_SUPPLY_CHARGER_REMOVE;
 
 	ret = smb347_update_status(smb);
 	if (ret < 0)
@@ -1045,6 +1060,9 @@ static int smb347_irq_init(struct smb347_charger *smb)
 	const struct smb347_charger_platform_data *pdata = smb->pdata;
 	int ret, irq = gpio_to_irq(pdata->irq_gpio);
 
+	gpio_tlmm_config(GPIO_CFG(pdata->irq_gpio, 0, GPIO_CFG_INPUT,
+                       GPIO_CFG_PULL_UP, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
+
 	ret = gpio_request_one(pdata->irq_gpio, GPIOF_IN, smb->client->name);
 	if (ret < 0)
 		goto fail;
@@ -1137,13 +1155,7 @@ static int smb347_battery_get_property(struct power_supply *psy,
 	const struct smb347_charger_platform_data *pdata = smb->pdata;
 	int ret;
 
-	if(smb->is_suspend)
-		pdata->enable_power(1);
-
 	ret = smb347_update_status(smb);
-
-	if(smb->is_suspend)
-		pdata->enable_power(0);
 
 	if (ret < 0)
 		return ret;
@@ -1372,7 +1384,7 @@ void smb347_late_resume(struct early_suspend *h)
 
 	pr_info("%s: enter\n", __func__);
 
-	if(!((wakelock_smb_count) || (smb347_is_online(the_chip)))){
+	if(the_chip->is_suspend){
 		pdata->enable_power(1);
 		smb347_hw_init(the_chip);
 		the_chip->is_suspend = false;

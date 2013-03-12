@@ -142,13 +142,13 @@ static struct gpiomux_setting gsbi9 = {
 static struct gpiomux_setting gsbi10 = {
 	.func = GPIOMUX_FUNC_2,
 	.drv = GPIOMUX_DRV_8MA,
-	.pull = GPIOMUX_PULL_NONE,
+	.pull = GPIOMUX_PULL_UP,
 };
 
 static struct gpiomux_setting gsbi12 = {
 	.func = GPIOMUX_FUNC_1,
 	.drv = GPIOMUX_DRV_8MA,
-	.pull = GPIOMUX_PULL_NONE,
+	.pull = GPIOMUX_PULL_UP,
 };
 
 static struct gpiomux_setting cdc_mclk = {
@@ -160,7 +160,7 @@ static struct gpiomux_setting cdc_mclk = {
 static struct gpiomux_setting gsbi11 = {
 	.func = GPIOMUX_FUNC_1,
 	.drv = GPIOMUX_DRV_8MA,
-	.pull = GPIOMUX_PULL_NONE,
+	.pull = GPIOMUX_PULL_UP,
 };
 
 
@@ -766,7 +766,7 @@ static struct msm_gpiomux_config msm8930_haptics_configs[] __initdata = {
 static struct gpiomux_setting sd_det_line = {
 	.func = GPIOMUX_FUNC_GPIO,
 	.drv = GPIOMUX_DRV_2MA,
-	.pull = GPIOMUX_PULL_NONE,
+	.pull = GPIOMUX_PULL_UP,
 };
 
 static struct msm_gpiomux_config msm8930_sd_det_config[] __initdata = {
@@ -852,6 +852,55 @@ static struct msm_gpiomux_config msm_sitar_config[] __initdata = {
 	}
 };
 
+static struct gpiomux_setting ps_hold_config = {
+	.func = GPIOMUX_FUNC_1,
+	.drv = GPIOMUX_DRV_10MA,
+	.pull = GPIOMUX_PULL_UP,
+};
+
+static struct msm_gpiomux_config pshold_config[] __initdata = {
+	{
+		.gpio = 108,
+		.settings = {
+			[GPIOMUX_SUSPENDED] = &ps_hold_config,
+			[GPIOMUX_ACTIVE] = &ps_hold_config,
+		},
+	},
+};
+
+static struct gpiomux_setting smb_chg_inok_config = {
+	.func = GPIOMUX_FUNC_GPIO,
+	.drv = GPIOMUX_DRV_2MA,
+	.pull = GPIOMUX_PULL_UP,
+};
+
+static struct gpiomux_setting smb_chg_vchg_config = {
+	.func = GPIOMUX_FUNC_GPIO,
+	.drv = GPIOMUX_DRV_2MA,
+	.pull = GPIOMUX_PULL_UP,
+};
+
+static struct gpiomux_setting smb_chg_vchg_sleep_config = {
+	.func = GPIOMUX_FUNC_GPIO,
+	.drv = GPIOMUX_DRV_2MA,
+	.pull = GPIOMUX_PULL_UP,
+};
+
+static struct msm_gpiomux_config smb_config[] __initdata = {
+	{
+		.gpio = 55,
+		.settings = {
+			[GPIOMUX_SUSPENDED] = &smb_chg_inok_config,
+			[GPIOMUX_ACTIVE] = &smb_chg_inok_config,
+		},
+		.gpio = 90,
+		.settings = {
+			[GPIOMUX_SUSPENDED] = &smb_chg_vchg_sleep_config,
+			[GPIOMUX_ACTIVE] = &smb_chg_vchg_config,
+		},
+	},
+};
+
 int __init msm8930_init_gpiomux(void)
 {
 	int rc = msm_gpiomux_init(NR_GPIO_IRQS);
@@ -931,6 +980,12 @@ int __init msm8930_init_gpiomux(void)
             ARRAY_SIZE(mic_biase_switch_config));
 
 	msm_gpiomux_install(msm_sitar_config, ARRAY_SIZE(msm_sitar_config));
+
+	msm_gpiomux_install(pshold_config,
+			ARRAY_SIZE(pshold_config));
+
+	msm_gpiomux_install(smb_config,
+			ARRAY_SIZE(smb_config));
 
 	return 0;
 }
