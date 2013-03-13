@@ -2484,15 +2484,15 @@ static int synaptics_rmi4_resume(struct device *dev)
 			rmi4_data->board;
 	int retval;
 
-    printk(KERN_EMERG "%s %d %s\n", __func__, __LINE__, "");
+	printk(KERN_EMERG "%s %d %s\n", __func__, __LINE__, "");
+
+	if (platform_data->regulator_en && platform_data->power_on)
+		platform_data->power_on(true);
 
 	retval = platform_data->request_gpios();
 	if (retval){
 		printk(KERN_EMERG "11111111111111111111");
 	}
-
-	if (platform_data->regulator_en && platform_data->power_on)
-        platform_data->power_on(true);
 
 	synaptics_rmi4_sensor_wake(rmi4_data);
 	rmi4_data->touch_stopped = false;
