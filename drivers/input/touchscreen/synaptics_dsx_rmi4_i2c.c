@@ -114,6 +114,12 @@ static ssize_t synaptics_rmi4_0dbutton_show(struct device *dev,
 static ssize_t synaptics_rmi4_0dbutton_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t count);
 
+static ssize_t synaptics_rmi4_chip_show(struct device *dev,
+		struct device_attribute *attr, char *buf);
+
+static ssize_t synaptics_rmi4_chip_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count);
+
 struct synaptics_rmi4_f01_device_status {
 	union {
 		struct {
@@ -316,6 +322,9 @@ static struct device_attribute attrs[] = {
 	__ATTR(0dbutton, (S_IRUGO | S_IWUSR),
 			synaptics_rmi4_0dbutton_show,
 			synaptics_rmi4_0dbutton_store),
+	__ATTR(chip, (S_IRUGO | S_IWUSR),
+			synaptics_rmi4_chip_show,
+			synaptics_rmi4_chip_store),
 };
 
 static bool exp_fn_inited;
@@ -461,6 +470,21 @@ static ssize_t synaptics_rmi4_0dbutton_store(struct device *dev,
 	rmi4_data->button_0d_enabled = input;
 
 	return count;
+}
+
+static ssize_t synaptics_rmi4_chip_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct synaptics_rmi4_data *rmi4_data = dev_get_drvdata(dev);
+
+	return snprintf(buf, PAGE_SIZE, "%s",
+			rmi4_data->chip_name);
+}
+
+static ssize_t synaptics_rmi4_chip_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	return 0;
 }
 
 static void synaptics_rmi4_proc_fngr(struct synaptics_rmi4_data *rmi4_data,
@@ -1893,8 +1917,8 @@ static void synaptics_rmi4_detection_work(struct work_struct *work)
 				exp_fhandler->inserted = true;
 			} else if ((exp_fhandler->func_init == NULL) &&
 					(exp_fhandler->inserted == true)) {
-				exp_fhandler->inserted = false;
 				exp_fhandler->func_remove(rmi4_data);
+				exp_fhandler->inserted = false;
 				list_del(&exp_fhandler->link);
 				kfree(exp_fhandler);
 			}
@@ -2181,6 +2205,20 @@ static int __devinit synaptics_rmi4_probe(struct i2c_client *client,
 					__func__);
 			goto err_sysfs;
 		}
+	}
+
+	switch((int)dev_id->driver_data){
+		case 0:
+			snprintf(rmi4_data->chip_name, 10, "%s", "s7300");
+			break;
+		case 1:
+			snprintf(rmi4_data->chip_name, 10, "%s", "s7020");
+			break;
+		case 2:
+			snprintf(rmi4_data->chip_name, 10, "%s", "s3202");
+			break;
+		default:
+			break;
 	}
 
 	return retval;
@@ -2484,15 +2522,15 @@ static int synaptics_rmi4_resume(struct device *dev)
 			rmi4_data->board;
 	int retval;
 
-    printk(KERN_EMERG "%s %d %s\n", __func__, __LINE__, "");
+	printk(KERN_EMERG "%s %d %s\n", __func__, __LINE__, "");
+
+	if (platform_data->regulator_en && platform_data->power_on)
+		platform_data->power_on(true);
 
 	retval = platform_data->request_gpios();
 	if (retval){
 		printk(KERN_EMERG "11111111111111111111");
 	}
-
-	if (platform_data->regulator_en && platform_data->power_on)
-        platform_data->power_on(true);
 
 	synaptics_rmi4_sensor_wake(rmi4_data);
 	rmi4_data->touch_stopped = false;
