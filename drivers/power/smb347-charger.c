@@ -22,7 +22,6 @@
 #include <linux/power_supply.h>
 #include <linux/power/smb347-charger.h>
 #include <linux/seq_file.h>
-
 #include <linux/wakelock.h>
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
@@ -129,6 +128,9 @@
 #define STAT_C_CHARGER_ERROR			BIT(6)
 #define STAT_E					0x3f
 
+#define SW_COLD_PROTECT_CURRENT 		700000
+#define SW_HOT_PROTECT_CURRENT			1200000
+
 /**
  * struct smb347_charger - smb347 charger instance
  * @lock: protects concurrent access to online variables
@@ -152,6 +154,7 @@ struct smb347_charger {
 	bool			usb_online;
 	bool			charging_enabled;
 	bool			is_suspend;
+	bool			is_temperature_protect;
 	struct dentry		*dentry;
 	const struct 		smb347_charger_platform_data *pdata;
 	int			charger_type_flags;
@@ -784,8 +787,15 @@ static int smb347_set_temp_limits(struct smb347_charger *smb)
 	}
 
 	if (smb->pdata->charge_current_compensation) {
+
 		val = current_to_hw(ccc_tbl, ARRAY_SIZE(ccc_tbl),
 				    smb->pdata->charge_current_compensation);
+
+		if (battery_temperature <= smb->pdata->soft_cold_temp_limit)
+			val = current_to_hw(ccc_tbl, ARRAY_SIZE(ccc_tbl), SW_COLD_PROTECT_CURRENT);
+		else
+			val = current_to_hw(ccc_tbl, ARRAY_SIZE(ccc_tbl), SW_HOT_PROTECT_CURRENT);
+
 		if (val < 0)
 			return val;
 
@@ -1172,6 +1182,10 @@ static int smb347_battery_get_property(struct power_supply *psy,
 			val->intval = POWER_SUPPLY_STATUS_FULL;
 		break;
 
+	case POWER_SUPPLY_PROP_HEALTH:
+		val->intval = POWER_SUPPLY_HEALTH_GOOD;
+		break;
+
 	case POWER_SUPPLY_PROP_CHARGE_TYPE:
 		if (!smb347_is_online(smb))
 			return -ENODATA;
@@ -1243,6 +1257,18 @@ static int smb347_battery_get_property(struct power_supply *psy,
 
 	case POWER_SUPPLY_PROP_TEMP:
 		val->intval = battery_temperature;
+
+		if (((battery_temperature <= (smb->pdata->soft_cold_temp_limit + 1)) ||
+			(battery_temperature >= (smb->pdata->soft_hot_temp_limit -1))) &&
+			(smb->is_temperature_protect == false))
+		{
+			smb->is_temperature_protect = true;
+			smb347_set_temp_limits(smb);
+		}
+		else if ((battery_temperature > smb->pdata->soft_cold_temp_limit) &&
+			(battery_temperature < smb->pdata->soft_hot_temp_limit))
+			smb->is_temperature_protect = false;
+
 		break;
 
 	case POWER_SUPPLY_PROP_MODEL_NAME:
@@ -1258,6 +1284,7 @@ static int smb347_battery_get_property(struct power_supply *psy,
 
 static enum power_supply_property smb347_battery_properties[] = {
 	POWER_SUPPLY_PROP_STATUS,
+	POWER_SUPPLY_PROP_HEALTH,
 	POWER_SUPPLY_PROP_CHARGE_TYPE,
 	POWER_SUPPLY_PROP_TECHNOLOGY,
 	POWER_SUPPLY_PROP_VOLTAGE_MIN_DESIGN,
