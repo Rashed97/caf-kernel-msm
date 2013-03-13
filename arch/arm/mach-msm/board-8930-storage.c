@@ -139,9 +139,9 @@ static struct msm_mmc_pad_pull sdc1_pad_pull_off_cfg[] = {
 
 /* SDC3 pad data */
 static struct msm_mmc_pad_drv sdc3_pad_drv_on_cfg[] = {
-	{TLMM_HDRV_SDC3_CLK, GPIO_CFG_8MA},
-	{TLMM_HDRV_SDC3_CMD, GPIO_CFG_8MA},
-	{TLMM_HDRV_SDC3_DATA, GPIO_CFG_8MA}
+	{TLMM_HDRV_SDC3_CLK, GPIO_CFG_16MA},
+	{TLMM_HDRV_SDC3_CMD, GPIO_CFG_16MA},
+	{TLMM_HDRV_SDC3_DATA, GPIO_CFG_16MA}
 };
 
 static struct msm_mmc_pad_drv sdc3_pad_drv_off_cfg[] = {
@@ -151,7 +151,7 @@ static struct msm_mmc_pad_drv sdc3_pad_drv_off_cfg[] = {
 };
 
 static struct msm_mmc_pad_pull sdc3_pad_pull_on_cfg[] = {
-	{TLMM_PULL_SDC3_CLK, GPIO_CFG_NO_PULL},
+	{TLMM_PULL_SDC3_CLK, GPIO_CFG_PULL_UP},
 	{TLMM_PULL_SDC3_CMD, GPIO_CFG_PULL_UP},
 	{TLMM_PULL_SDC3_DATA, GPIO_CFG_PULL_UP}
 };
