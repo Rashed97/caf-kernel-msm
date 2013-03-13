@@ -2117,13 +2117,13 @@ static void smb_init_power(bool on)
 
 	if (on) {	
 		regulator_enable(regulator_lvs2);
-		regulator_enable(regulator_lvs1);
 		regulator_enable(regulator_l9);
+		regulator_enable(regulator_lvs1);
 	}
 	else{
-		regulator_disable(regulator_lvs2);
 		regulator_disable(regulator_lvs1);
 		regulator_disable(regulator_l9);
+		regulator_disable(regulator_lvs2);
 	}
 
 }
@@ -2192,6 +2192,7 @@ static struct smb347_charger_platform_data smb347_data = {
        .enable_power=smb_init_power,
        .enable_charging=smb_enable_charging,
        .platform_init = smb347_init,
+       .battery_info.technology=POWER_SUPPLY_TECHNOLOGY_LION,
 };
 
 static struct i2c_board_info smb347_dev[] __initdata= {
@@ -3226,20 +3227,20 @@ static struct i2c_registry msm8960_i2c_devices[] __initdata = {
 		mxt_device_info_8930,
 		ARRAY_SIZE(mxt_device_info_8930),
 	},
-#ifdef CONFIG_BATTERY_BQ27541
- 	{
-		I2C_SURF | I2C_FFA | I2C_FLUID,
-		MSM_8930_GSBI11_QUP_I2C_BUS_ID,
-        	msm_bq27541_board_info,
-		ARRAY_SIZE(msm_bq27541_board_info),
-	},
-#endif
 #ifdef CONFIG_CHARGER_SMB347
  	{
 		I2C_SURF | I2C_FFA | I2C_FLUID,
 		MSM_8930_GSBI11_QUP_I2C_BUS_ID,
         	smb347_dev,
 		ARRAY_SIZE(smb347_dev),
+	},
+#endif
+#ifdef CONFIG_BATTERY_BQ27541
+ 	{
+		I2C_SURF | I2C_FFA | I2C_FLUID,
+		MSM_8930_GSBI11_QUP_I2C_BUS_ID,
+        	msm_bq27541_board_info,
+		ARRAY_SIZE(msm_bq27541_board_info),
 	},
 #endif
 	{
