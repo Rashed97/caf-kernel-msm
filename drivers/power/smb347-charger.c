@@ -1165,8 +1165,8 @@ static int smb347_battery_get_property(struct power_supply *psy,
 
 	ret = smb347_update_status(smb);
 
-	if (ret < 0)
-		return ret;
+	//if (ret < 0)
+	//	return ret;
 
 	switch (prop) {
 	case POWER_SUPPLY_PROP_STATUS:
