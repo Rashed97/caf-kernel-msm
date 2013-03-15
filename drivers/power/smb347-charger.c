@@ -328,11 +328,9 @@ void update_charger_type(struct smb347_charger *smb)
 	const struct smb347_charger_platform_data *pdata = smb->pdata;
 	static bool charging_gpio = false;
 
-	if(smb->is_suspend){
-		ret = smb347_set_writable(smb, true);
-		if (ret < 0)
-			return;
-	}
+	ret = smb347_set_writable(smb, true);
+	if (ret < 0)
+                return;
 
 	cfg_ret = smb347_read(smb, CFG_PIN);
 	cfg_ret &= ~CFG_PIN_EN_CTRL_MASK;
