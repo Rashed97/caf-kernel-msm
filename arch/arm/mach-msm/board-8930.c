@@ -2270,7 +2270,7 @@ void __init msm_mic_biase_switch_init(void) {
 /* 	Synaptics Thin Driver	*/
 #if defined(CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_RMI4_I2C) || defined(CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_RMI4_I2C_MODULE)
 #define S7300_ADDR	0x20
-#define S7020_ADDR	0x70
+#define S7020_ADDR	0x20
 #define TP_ATTN		11
 #define TP_RESET	52
 
