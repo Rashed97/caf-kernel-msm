@@ -23,6 +23,7 @@
 #include <linux/power/smb347-charger.h>
 #include <linux/seq_file.h>
 #include <linux/wakelock.h>
+#include <linux/delay.h>
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
 #include <linux/earlysuspend.h>
@@ -925,7 +926,13 @@ static irqreturn_t smb347_interrupt(int irq, void *data)
 	struct smb347_charger *smb = data;
 	int irqstat_b;
 	int stat_c, irqstat_e, irqstat_c;
+	const struct smb347_charger_platform_data *pdata = smb->pdata;
 	irqreturn_t ret = IRQ_NONE;
+
+  if(the_chip->is_suspend){
+		pdata->enable_power(1);
+		msleep(500);
+	}
 
 	irqstat_b = smb347_read(smb, IRQSTAT_B);
 	if (irqstat_b < 0) {
@@ -996,6 +1003,10 @@ static irqreturn_t smb347_interrupt(int irq, void *data)
 		ret = IRQ_HANDLED;
 	}
 
+  if(the_chip->is_suspend){
+		pdata->enable_power(0);
+	}
+	
 	return ret;
 }
 
@@ -1165,9 +1176,6 @@ static int smb347_battery_get_property(struct power_supply *psy,
 
 	ret = smb347_update_status(smb);
 
-	//if (ret < 0)
-	//	return ret;
-
 	switch (prop) {
 	case POWER_SUPPLY_PROP_STATUS:
 		if (!smb347_is_online(smb)) {
@@ -1185,9 +1193,6 @@ static int smb347_battery_get_property(struct power_supply *psy,
 		break;
 
 	case POWER_SUPPLY_PROP_CHARGE_TYPE:
-		if (!smb347_is_online(smb))
-			return -ENODATA;
-
 		/*
 		 * We handle trickle and pre-charging the same, and taper
 		 * and none the same.
@@ -1222,13 +1227,7 @@ static int smb347_battery_get_property(struct power_supply *psy,
 		break;
 
 	case POWER_SUPPLY_PROP_CURRENT_NOW:
-		if (!smb347_is_online(smb))
-			return -ENODATA;
-
 		ret = smb347_read(smb, STAT_B);
-		if (ret < 0)
-			return ret;
-
 		/*
 		 * The current value is composition of FCC and PCC values
 		 * and we can detect which table to use from bit 5.
@@ -1411,6 +1410,7 @@ void smb347_late_resume(struct early_suspend *h)
 
 	if(the_chip->is_suspend){
 		pdata->enable_power(1);
+		msleep(200);
 		smb347_hw_init(the_chip);
 		the_chip->is_suspend = false;
 		pr_info("power on smb347\n");
@@ -1506,7 +1506,7 @@ static int smb347_probe(struct i2c_client *client,
 	}
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
-	smb->early_suspend.level = EARLY_SUSPEND_LEVEL_DISABLE_FB;
+	smb->early_suspend.level = EARLY_SUSPEND_LEVEL_BLANK_SCREEN;
 	smb->early_suspend.suspend = smb347_early_suspend;
 	smb->early_suspend.resume = smb347_late_resume;
 	register_early_suspend(&smb->early_suspend);
