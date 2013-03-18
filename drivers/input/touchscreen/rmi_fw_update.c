@@ -78,8 +78,10 @@
 #define SLEEP_MODE_RESERVED1 (0x03)
 
 #define ENABLE_WAIT_MS (1 * 1000)
+#define VARIFY_WAIT_MS (3 * 1000)
 #define WRITE_WAIT_MS (3 * 1000)
 #define ERASE_WAIT_MS (5 * 1000)
+
 
 #define MIN_SLEEP_TIME_US 50
 #define MAX_SLEEP_TIME_US 100
@@ -825,6 +827,17 @@ static int fwu_start_reflash(void)
 
 	if (fw_entry)
 		release_firmware(fw_entry);
+
+	retval = fwu_wait_for_idle(VARIFY_WAIT_MS);
+	if (retval < 0) {
+		dev_err(&fwu->rmi4_data->i2c_client->dev,
+				"%s: Failed to wait for idle status\n", __func__);
+		return retval;
+	}
+
+	/*if varification is complete, reset the device*/
+	fwu->rmi4_data->reset_device(fwu->rmi4_data);
+
 
 	pr_notice("%s: End of reflash process\n", __func__);
 
