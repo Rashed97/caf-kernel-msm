@@ -1834,9 +1834,6 @@ flash_prog_mode:
 				return retval;
 		}
 	}
-	if (status.flash_prog == 1) {
-		retval = synaptics_rmi4_reset_device(rmi4_data);
-	}
 
 	return 0;
 }
@@ -2098,7 +2095,7 @@ static int __devinit synaptics_rmi4_probe(struct i2c_client *client,
         }
     }
 
-        platform_data->hardware_reset();
+	platform_data->hardware_reset();
 
 	init_waitqueue_head(&rmi4_data->wait);
 	mutex_init(&(rmi4_data->rmi4_io_ctrl_mutex));
@@ -2207,14 +2204,14 @@ static int __devinit synaptics_rmi4_probe(struct i2c_client *client,
 		}
 	}
 
-	switch((int)dev_id->driver_data){
-		case 0:
-			snprintf(rmi4_data->chip_name, 10, "%s", "s7300");
-			break;
+	switch(rmi4_data->rmi4_mod_info.product_info[0]){
 		case 1:
 			snprintf(rmi4_data->chip_name, 10, "%s", "s7020");
 			break;
 		case 2:
+			snprintf(rmi4_data->chip_name, 10, "%s", "s7300");
+			break;
+		case 3:
 			snprintf(rmi4_data->chip_name, 10, "%s", "s3202");
 			break;
 		default:
