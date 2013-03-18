@@ -35,6 +35,7 @@
 #include <linux/msm-charger.h>
 #include <linux/i2c/bq27520.h> /* use the same platform data as bq27520 */
 #include <linux/workqueue.h>
+#include <linux/wakelock.h>
 
 #define DRIVER_VERSION			"1.1.0"
 /* Bq27541 standard data commands */
@@ -129,6 +130,7 @@ struct bq27541_device_info {
 
 static int coulomb_counter;
 static spinlock_t lock; /* protect access to coulomb_counter */
+struct wake_lock bq27541_lock;
 
 static int bq27541_i2c_txsubcmd(u8 reg, unsigned short subcmd,
 		struct bq27541_device_info *di);
@@ -543,8 +545,9 @@ static void msm_battery_update_psy_status(void)
 	battery_mvolts = bq27541_get_battery_mvolts();
 	udelay(100);
 
+  wake_lock(&bq27541_lock);
 	regulator_enable(regulator_lvs2);
-
+  msleep(500);
 	if(!(bq27541_di->power_cable_boot))
 		battery_capacity = bq27541_get_battery_capacity();
 	else
@@ -555,6 +558,7 @@ static void msm_battery_update_psy_status(void)
 	charge_current = (short) bq27541_get_battery_current();
 	udelay(100);
 	regulator_disable(regulator_lvs2);
+  wake_unlock(&bq27541_lock);
 
 	printk("%s mvolts=%d capacity=%d temperature=%d charge_current=%d\n", __FUNCTION__,
 		(int) battery_mvolts, (int) battery_capacity, (int) battery_temperature, (short) charge_current);
@@ -640,6 +644,8 @@ static int bq27541_battery_probe(struct i2c_client *client,
 		goto batt_failed_4;
 	}
 
+  wake_lock_init(&bq27541_lock, WAKE_LOCK_SUSPEND, "bq27541_lock");
+  
 	spin_lock_init(&lock);
 
 	bq27541_di = di;
