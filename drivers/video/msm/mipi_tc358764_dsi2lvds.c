@@ -630,7 +630,7 @@ static int mipi_d2l_lcd_on(struct platform_device *pdev)
 
 	/* Set backlight via PWM */
 	if (bl_pwm) {
-		ret = mipi_d2l_set_backlight_level(bl_pwm, bl_level);
+		ret = mipi_d2l_set_backlight_level(bl_pwm, 0);
 		if (ret)
 			pr_err("%s.mipi_d2l_set_backlight_level.ret=%d",
 			       __func__, ret);
@@ -670,7 +670,7 @@ static int mipi_d2l_lcd_off(struct platform_device *pdev)
 	if (mfd->key != MFD_KEY)
 		return -EINVAL;
 
-	ret = mipi_d2l_set_backlight_level(bl_pwm, 1);
+	ret = mipi_d2l_set_backlight_level(bl_pwm, 0);
 
 	pr_info("%s.ret=%d.\n", __func__, ret);
 
