@@ -49,6 +49,10 @@
 #include "mdp.h"
 #include "mdp4.h"
 
+#ifdef CONFIG_FB_MSM_LOGO
+static int fbopen_internal_cnt = 0;
+#endif
+
 #ifdef CONFIG_FB_MSM_TRIPLE_BUFFER
 #define MSM_FB_NUM	3
 #endif
@@ -1488,8 +1492,19 @@ static int msm_fb_register(struct msm_fb_data_type *mfd)
 
 #ifdef CONFIG_FB_MSM_LOGO
 	/* Flip buffer */
+#if 0
 	if (!load_565rle_image(INIT_IMAGE_FILE, bf_supported))
 		;
+#endif
+	if (!load_565rle_image_qrd_tablet_8x30()) {
+		/* Flip buffer */
+		if (!fbopen_internal_cnt) {
+			printk("%s: fbopen_internal_cnt = %d\n", __func__, fbopen_internal_cnt);
+			msm_fb_open(fbi, 0);
+			msm_fb_set_backlight(mfd, 200);
+			fbopen_internal_cnt++;
+		}
+	}
 #endif
 	ret = 0;
 
@@ -1639,6 +1654,13 @@ static int msm_fb_open(struct fb_info *info, int user)
 {
 	struct msm_fb_data_type *mfd = (struct msm_fb_data_type *)info->par;
 	int result;
+
+	if (fbopen_internal_cnt) {
+		printk("%s: fbopen_internal_cnt = %d\n", __func__, fbopen_internal_cnt);
+		msm_fb_release(info, 0);
+		fbopen_internal_cnt--;
+		return 0;
+	}
 
 	result = pm_runtime_get_sync(info->dev);
 
