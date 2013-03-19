@@ -188,7 +188,7 @@ static void msm_fb_set_bl_brightness(struct led_classdev *led_cdev,
 		/(2 * MAX_BACKLIGHT_BRIGHTNESS);
 
 	if (!bl_lvl && value)
-		bl_lvl = 1;
+		bl_lvl = 0;
 	down(&mfd->sem);
 	msm_fb_set_backlight(mfd, bl_lvl);
 	up(&mfd->sem);
@@ -854,12 +854,14 @@ void msm_fb_set_backlight(struct msm_fb_data_type *mfd, __u32 bkl_lvl)
 {
 	struct msm_fb_panel_data *pdata;
 	__u32 temp = bkl_lvl;
+#if 0
 	if (!mfd->panel_power_on || !bl_updated) {
 		unset_bl_level = bkl_lvl;
 		return;
 	} else {
 		unset_bl_level = 0;
 	}
+#endif
 
 	pdata = (struct msm_fb_panel_data *)mfd->pdev->dev.platform_data;
 
