@@ -929,7 +929,7 @@ static irqreturn_t smb347_interrupt(int irq, void *data)
 	const struct smb347_charger_platform_data *pdata = smb->pdata;
 	irqreturn_t ret = IRQ_NONE;
 
-  if(the_chip->is_suspend){
+  	if(the_chip->is_suspend){
 		pdata->enable_power(1);
 		msleep(500);
 	}
@@ -1003,7 +1003,7 @@ static irqreturn_t smb347_interrupt(int irq, void *data)
 		ret = IRQ_HANDLED;
 	}
 
-  if(the_chip->is_suspend){
+  	if(the_chip->is_suspend){
 		pdata->enable_power(0);
 	}
 	
