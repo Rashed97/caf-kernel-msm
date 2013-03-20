@@ -542,23 +542,27 @@ short charge_current;
 static void msm_battery_update_psy_status(void)
 {
 	
+  wake_lock(&bq27541_lock);
+	regulator_enable(regulator_lvs2);
+	msleep(500);
+
+	charge_current = (short) bq27541_get_battery_current();
+	udelay(100);
+
 	battery_mvolts = bq27541_get_battery_mvolts();
 	udelay(100);
 
-  wake_lock(&bq27541_lock);
-	regulator_enable(regulator_lvs2);
-  msleep(500);
 	if(!(bq27541_di->power_cable_boot))
 		battery_capacity = bq27541_get_battery_capacity();
 	else
 		battery_capacity = POWER_SUPPLY_BOOT_CAPACITY;
 	udelay(100);
+
 	battery_temperature = bq27541_get_battery_temperature();
 	udelay(100);
-	charge_current = (short) bq27541_get_battery_current();
-	udelay(100);
+
 	regulator_disable(regulator_lvs2);
-  wake_unlock(&bq27541_lock);
+	wake_unlock(&bq27541_lock);
 
 	printk("%s mvolts=%d capacity=%d temperature=%d charge_current=%d\n", __FUNCTION__,
 		(int) battery_mvolts, (int) battery_capacity, (int) battery_temperature, (short) charge_current);
