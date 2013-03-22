@@ -405,6 +405,7 @@ static ssize_t al3010_store_mode(struct device *dev,
 	mutex_lock(&data->enable_mutex);
 	if (val) {
 		if (atomic_read(&data->enable) == 0) {
+			al3010_set_range(data->client, 1);
 			ret = al3010_set_mode(data->client, val);
 			schedule_delayed_work(&data->work, msecs_to_jiffies(atomic_read(&data->delay)));
 			atomic_set(&data->enable, 1);
@@ -674,7 +675,7 @@ static int al3010_init_client(struct i2c_client *client)
 	}
 
 	/* set defaults */
-	al3010_set_range(client, 0);
+	al3010_set_range(client, 1);
 	al3010_set_mode(client, 0);
 	al3010_set_althres(client, 0);
 	al3010_set_ahthres(client, 0);
@@ -864,6 +865,7 @@ static int al3010_resume(struct i2c_client *client)
 #else
 	mutex_lock(&data->enable_mutex);
 	if (atomic_read(&data->enable) == 1) {
+		al3010_set_range(data->client, 1);
 		al3010_set_power_state(client, data->power_state_before_suspend);
 		schedule_delayed_work(&data->work, msecs_to_jiffies(atomic_read(&data->delay)));
 	}
