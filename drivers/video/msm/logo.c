@@ -30,7 +30,9 @@
 #define fb_width(fb)	((fb)->var.xres)
 #define fb_height(fb)	((fb)->var.yres)
 #define fb_size(fb)	((fb)->var.xres * (fb)->var.yres * 2)
+#define fit_fb_width(fb)	(fb_width(info) / 32 + !!(fb_width(info) % 32)) * 32
 
+#ifdef CONFIG_FB_MSM_DEFAULT_DEPTH_RGB565
 static void memset16(void *_ptr, unsigned short val, unsigned count)
 {
 	unsigned short *ptr = _ptr;
@@ -104,13 +106,16 @@ err_logo_close_file:
 	return err;
 }
 EXPORT_SYMBOL(load_565rle_image);
+#endif
 
-int load_565rle_image_qrd_tablet_8x30(void)
+#if defined(CONFIG_FB_MSM_DEFAULT_DEPTH_ARGB8888) || defined(CONFIG_FB_MSM_DEFAULT_DEPTH_RGBA8888)
+int load_888rle_image_qrd_tablet_8x30(void)
 {
 	struct fb_info *info;
 	int fd, count, err = 0;
 	unsigned max;
-	unsigned short *data, *bits, *ptr;
+	unsigned short *data, *bits;
+	unsigned char  *ptr;
 	unsigned char fname[32];
 
 	info = registered_fb[0];
@@ -122,6 +127,7 @@ int load_565rle_image_qrd_tablet_8x30(void)
 
 	sprintf(fname, "%s_%dx%d", INIT_IMAGE_FILE_PREFIX,
 			fb_width(info), fb_height(info));
+
 	fd = sys_open(fname, O_RDONLY, 0);
 	if (fd < 0) {
 		printk(KERN_WARNING "%s: Can not open %s\n",
@@ -145,18 +151,21 @@ int load_565rle_image_qrd_tablet_8x30(void)
 		goto err_logo_free_data;
 	}
 
-	max = fb_width(info) * fb_height(info);
-	ptr = data;
+	max = fit_fb_width(info) * fb_height(info);
+	ptr = (unsigned char *)data;
 	bits = (unsigned short *)(info->screen_base);
-	while (count > 3) {
-		unsigned n = ptr[0];
+	while (count > 4) {
+		unsigned n = ((unsigned short *)ptr)[0];
 		if (n > max)
 			break;
-		memset16(bits, ptr[1], n << 1);
-		bits += n;
 		max -= n;
-		ptr += 2;
-		count -= 4;
+		count -= 6;
+		while (n) {
+			memcpy(bits, &ptr[2], 4);
+			n--;
+			bits += 2;
+		}
+		ptr += 6;
 	}
 	flush_cache_all();
 	outer_flush_all();
@@ -167,4 +176,5 @@ err_logo_close_file:
 	sys_close(fd);
 	return err;
 }
-EXPORT_SYMBOL(load_565rle_image_qrd_tablet_8x30);
+EXPORT_SYMBOL(load_888rle_image_qrd_tablet_8x30);
+#endif

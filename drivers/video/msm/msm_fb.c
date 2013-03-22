@@ -1503,17 +1503,20 @@ static int msm_fb_register(struct msm_fb_data_type *mfd)
 	     mfd->index, fbi->var.xres, fbi->var.yres, fbi->fix.smem_len);
 
 #ifdef CONFIG_FB_MSM_LOGO
+#ifdef CONFIG_FB_MSM_DEFAULT_DEPTH_RGB565
 	/* Flip buffer */
-#if 0
 	if (!load_565rle_image(INIT_IMAGE_FILE, bf_supported))
 		;
+#else
+#if defined(CONFIG_FB_MSM_DEFAULT_DEPTH_ARGB8888) || defined(CONFIG_FB_MSM_DEFAULT_DEPTH_RGBA8888)
+	if (!load_888rle_image_qrd_tablet_8x30()) {
 #endif
-	if (!load_565rle_image_qrd_tablet_8x30()) {
+#endif
 		/* Flip buffer */
 		if (!fbopen_internal_cnt) {
 			printk("%s: fbopen_internal_cnt = %d\n", __func__, fbopen_internal_cnt);
 			msm_fb_open(fbi, 0);
-			msm_fb_set_backlight(mfd, 200);
+			msm_fb_set_backlight(mfd, 150);
 			fbopen_internal_cnt++;
 		}
 	}
@@ -1667,12 +1670,13 @@ static int msm_fb_open(struct fb_info *info, int user)
 	struct msm_fb_data_type *mfd = (struct msm_fb_data_type *)info->par;
 	bool unblank = true;
 	int result;
-
+#ifdef CONFIG_FB_MSM_LOGO
 	if (fbopen_internal_cnt) {
 		printk("%s: fbopen_internal_cnt = %d\n", __func__, fbopen_internal_cnt);
 		fbopen_internal_cnt--;
 		return 0;
 	}
+#endif
 
 	result = pm_runtime_get_sync(info->dev);
 

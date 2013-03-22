@@ -227,8 +227,13 @@ int msm_fb_check_frame_rate(struct msm_fb_data_type *mfd,
 
 #ifdef CONFIG_FB_MSM_LOGO
 #define INIT_IMAGE_FILE "/initlogo.rle"
+#ifdef CONFIG_FB_MSM_DEFAULT_DEPTH_RGB565
 int load_565rle_image(char *filename, bool bf_supported);
-int load_565rle_image_qrd_tablet_8x30(void);
+#else
+#if defined(CONFIG_FB_MSM_DEFAULT_DEPTH_ARGB8888) || defined(CONFIG_FB_MSM_DEFAULT_DEPTH_RGBA8888)
+int load_888rle_image_qrd_tablet_8x30(void);
+#endif
+#endif
 #endif
 
 #endif /* MSM_FB_H */
