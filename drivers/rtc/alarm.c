@@ -612,7 +612,7 @@ static int alarm_resume(struct platform_device *pdev)
 
 	memset(&alarm, 0, sizeof(alarm));
 	alarm.enabled = 0;
-	//rtc_set_alarm(alarm_rtc_dev, &alarm);
+	rtc_set_alarm(alarm_rtc_dev, &alarm);
 
 	spin_lock_irqsave(&alarm_slock, flags);
 	suspended = false;
