@@ -101,6 +101,14 @@
 #define ZERO_DEGREE_CELSIUS_IN_TENTH_KELVIN   (-2731)
 #define BQ27541_INIT_DELAY   ((HZ)*1)
 
+#define	BATT_POLLING_TIME		(10 * HZ)
+#define POWER_SUPPLY_BOOT_CAPACITY	100
+
+int battery_mvolts;
+int battery_capacity;
+int battery_temperature;
+short charge_current;
+
 /* If the system has several batteries we need a different name for each
  * of them...
  */
@@ -153,6 +161,7 @@ static int bq27541_battery_capacity(struct bq27541_device_info *di)
 	ret = bq27541_read(BQ27541_REG_SOC, &cap, 0, di);
 	if (ret) {
 		dev_err(di->dev, "error reading capacity\n");
+		battery_capacity = POWER_SUPPLY_BOOT_CAPACITY;
 		return ret;
 	}
 
@@ -531,36 +540,25 @@ static struct platform_device this_device = {
 };
 #endif
 
-#define	BATT_POLLING_TIME		(10 * HZ)
-#define POWER_SUPPLY_BOOT_CAPACITY	100
-
-int battery_mvolts;
-int battery_capacity;
-int battery_temperature;
-short charge_current;
-
 static void msm_battery_update_psy_status(void)
 {
 	
-  wake_lock(&bq27541_lock);
+	if(bq27541_di->power_cable_boot){
+		battery_capacity = POWER_SUPPLY_BOOT_CAPACITY;
+		return;
+	}
+
+  	wake_lock(&bq27541_lock);
 	regulator_enable(regulator_lvs2);
 	msleep(500);
-
 	charge_current = (short) bq27541_get_battery_current();
 	udelay(100);
-
 	battery_mvolts = bq27541_get_battery_mvolts();
 	udelay(100);
-
-	if(!(bq27541_di->power_cable_boot))
-		battery_capacity = bq27541_get_battery_capacity();
-	else
-		battery_capacity = POWER_SUPPLY_BOOT_CAPACITY;
+	battery_capacity = bq27541_get_battery_capacity();	
 	udelay(100);
-
 	battery_temperature = bq27541_get_battery_temperature();
 	udelay(100);
-
 	regulator_disable(regulator_lvs2);
 	wake_unlock(&bq27541_lock);
 
