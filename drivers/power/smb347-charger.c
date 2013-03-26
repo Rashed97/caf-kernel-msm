@@ -1173,8 +1173,14 @@ static int smb347_battery_get_property(struct power_supply *psy,
 			container_of(psy, struct smb347_charger, battery);
 	const struct smb347_charger_platform_data *pdata = smb->pdata;
 	int ret;
+	bool charge;
 
-	ret = smb347_update_status(smb);
+	charge = pm8921_is_usb_chg_plugged_in();
+	if (charge == -EINVAL)
+		charge = 0;
+
+	if((!(the_chip->is_suspend)) || charge)
+		ret = smb347_update_status(smb);
 
 	switch (prop) {
 	case POWER_SUPPLY_PROP_STATUS:
