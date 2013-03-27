@@ -4580,7 +4580,7 @@ static ssize_t hdmi_msm_online_store(struct device *dev,
 	return count;
 }
 
-static DEVICE_ATTR(online, 0777, hdmi_msm_online_show, hdmi_msm_online_store);
+static DEVICE_ATTR(online, S_IRUGO | S_IWUSR, hdmi_msm_online_show, hdmi_msm_online_store);
 
 static int __devinit hdmi_msm_probe(struct platform_device *pdev)
 {
@@ -4823,8 +4823,10 @@ static int __devexit hdmi_msm_remove(struct platform_device *pdev)
 static int hdmi_msm_hpd_feature(int on)
 {
 	int rc = 0;
-
-	DEV_INFO("%s: %d\n", __func__, on);
+  
+  if(on != _hdmi_online)
+     on = _hdmi_online;
+     DEV_INFO("%s: %d\n", __func__, on);
 	if (on) {
 		rc = hdmi_msm_hpd_on();
 	} else {
