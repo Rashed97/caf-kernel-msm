@@ -230,12 +230,14 @@ void smb347_charger_vbus_draw(unsigned int mA)
 
 	if (mA == IDEV_CHG_MIN){
 		the_chip->charger_type_flags = POWER_SUPPLY_CHARGER_USB;
+		the_chip->usb_online = 1;
 		power_supply_changed(&the_chip->usb);
 		wakelock_smb_count = true;
 		wake_lock(&smb_lock);
 	}
 	else if (mA == IDEV_CHG_MAX){
 		the_chip->charger_type_flags = POWER_SUPPLY_CHARGER_AC;
+		the_chip->mains_online = 1;
 		power_supply_changed(&the_chip->mains);
 		wakelock_smb_count = true;
 		wake_lock(&smb_lock);
@@ -250,6 +252,8 @@ void smb347_charger_vbus_draw(unsigned int mA)
 					wake_unlock(&smb_lock);
 					wakelock_smb_count = false;
 				}
+				the_chip->mains_online = 0;
+				the_chip->usb_online = 0;
 				the_chip->charger_type_flags = POWER_SUPPLY_CHARGER_REMOVE;
 				power_supply_changed(&the_chip->battery);
 		}
@@ -385,9 +389,6 @@ static int smb347_update_status(struct smb347_charger *smb)
 	bool dc		= false;
 	int ret = 0;
 
-	ret = smb347_read(smb, IRQSTAT_E);
-	if (ret < 0)
-		return ret;
 	/*
 	 * Dc and usb are set depending on whether they are enabled in
 	 * platform data _and_ whether corresponding undervoltage is set.
@@ -415,8 +416,8 @@ static int smb347_update_status(struct smb347_charger *smb)
 
 	pr_debug("%s dc=%d usb=%d charge=%d charger_type=%d\n", __FUNCTION__, dc,
 		usb, charge, the_chip->charger_type_flags);
-
-	mutex_lock(&smb->lock);
+	pr_debug(" wakelock_smb_count %d mains_online %d usb_online %d\n", wakelock_smb_count, the_chip->mains_online, the_chip->usb_online);
+	mutex_lock(&smb->lock);	
 
         if (smb->usb_online != usb) {
                 smb->usb_online = usb;
@@ -430,7 +431,7 @@ static int smb347_update_status(struct smb347_charger *smb)
 		ret = 1;
         }
 
-	if (ret)
+	if (!(smb->is_suspend))
 		update_charger_type(smb);
 
 	mutex_unlock(&smb->lock);
@@ -468,6 +469,9 @@ static bool smb347_is_online(struct smb347_charger *smb)
 static int smb347_charging_status(struct smb347_charger *smb)
 {
 	int ret;
+
+	if(smb->is_suspend)
+		return 0;
 
 	if (!smb347_is_online(smb))
 		return 0;
@@ -1233,6 +1237,11 @@ static int smb347_battery_get_property(struct power_supply *psy,
 		break;
 
 	case POWER_SUPPLY_PROP_CURRENT_NOW:
+		if(smb->is_suspend){
+			val->intval = 0;
+			break;
+		}
+
 		ret = smb347_read(smb, STAT_B);
 		/*
 		 * The current value is composition of FCC and PCC values
@@ -1261,8 +1270,11 @@ static int smb347_battery_get_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_TEMP:
 		val->intval = battery_temperature;
 
-		if (((battery_temperature <= (smb->pdata->soft_cold_temp_limit + 1)) ||
-			(battery_temperature >= (smb->pdata->soft_hot_temp_limit -1))) &&
+		if(smb->is_suspend)
+			break;
+
+		if (((battery_temperature <= (smb->pdata->soft_cold_temp_limit + 5)) ||
+			(battery_temperature >= (smb->pdata->soft_hot_temp_limit -5))) &&
 			(smb->is_temperature_protect == false))
 		{
 			smb->is_temperature_protect = true;
