@@ -231,6 +231,7 @@ void smb347_charger_vbus_draw(unsigned int mA)
 	if (mA == IDEV_CHG_MIN){
 		the_chip->charger_type_flags = POWER_SUPPLY_CHARGER_USB;
 		the_chip->usb_online = 1;
+		power_supply_set_online(&the_chip->usb, the_chip->usb_online);
 		power_supply_changed(&the_chip->usb);
 		wakelock_smb_count = true;
 		wake_lock(&smb_lock);
@@ -238,6 +239,7 @@ void smb347_charger_vbus_draw(unsigned int mA)
 	else if (mA == IDEV_CHG_MAX){
 		the_chip->charger_type_flags = POWER_SUPPLY_CHARGER_AC;
 		the_chip->mains_online = 1;
+		power_supply_set_online(&the_chip->mains, the_chip->mains_online);
 		power_supply_changed(&the_chip->mains);
 		wakelock_smb_count = true;
 		wake_lock(&smb_lock);
@@ -255,6 +257,10 @@ void smb347_charger_vbus_draw(unsigned int mA)
 				the_chip->mains_online = 0;
 				the_chip->usb_online = 0;
 				the_chip->charger_type_flags = POWER_SUPPLY_CHARGER_REMOVE;
+                                power_supply_set_online(&the_chip->mains, the_chip->mains_online);
+                                power_supply_set_online(&the_chip->usb, the_chip->usb_online);
+                                power_supply_changed(&the_chip->mains);
+                                power_supply_changed(&the_chip->usb);
 				power_supply_changed(&the_chip->battery);
 		}
 	}
@@ -419,17 +425,8 @@ static int smb347_update_status(struct smb347_charger *smb)
 	pr_debug(" wakelock_smb_count %d mains_online %d usb_online %d\n", wakelock_smb_count, the_chip->mains_online, the_chip->usb_online);
 	mutex_lock(&smb->lock);	
 
-        if (smb->usb_online != usb) {
-                smb->usb_online = usb;
-                power_supply_changed(&smb->usb);
+        if ((smb->usb_online != usb) || (smb->mains_online != dc))
 		ret = 1;
-        }
-
-        if (smb->mains_online != dc) {
-                smb->mains_online = dc;
-                power_supply_changed(&smb->mains);
-		ret = 1;
-        }
 
 	if (!(smb->is_suspend))
 		update_charger_type(smb);
