@@ -131,6 +131,7 @@
 
 #define SW_COLD_PROTECT_CURRENT 		700000
 #define SW_HOT_PROTECT_CURRENT			1200000
+#define I2C_RETRY_TIMES				10
 
 /**
  * struct smb347_charger - smb347 charger instance
@@ -155,6 +156,7 @@ struct smb347_charger {
 	bool			usb_online;
 	bool			charging_enabled;
 	bool			is_suspend;
+	bool			is_early_suspend;
 	bool			is_temperature_protect;
 	struct dentry		*dentry;
 	const struct 		smb347_charger_platform_data *pdata;
@@ -226,6 +228,8 @@ static bool wakelock_smb_count;
 void smb347_charger_vbus_draw(unsigned int mA)
 {
 	bool charge	= false;
+	const struct smb347_charger_platform_data *pdata = the_chip->pdata;
+
 	pr_debug("Enter charge=%d\n", mA);
 
 	if (mA == IDEV_CHG_MIN){
@@ -262,6 +266,12 @@ void smb347_charger_vbus_draw(unsigned int mA)
                                 power_supply_changed(&the_chip->mains);
                                 power_supply_changed(&the_chip->usb);
 				power_supply_changed(&the_chip->battery);
+
+				if(the_chip->is_early_suspend){
+					pdata->enable_power(0);
+					the_chip->is_suspend = true;
+					pr_info("power off smb347\n");
+				}	
 		}
 	}
 }
@@ -287,23 +297,47 @@ static int current_to_hw(const unsigned int *tbl, size_t size, unsigned int val)
 
 static int smb347_read(struct smb347_charger *smb, u8 reg)
 {
-	int ret;
+	int retry, ret;
 
 	ret = i2c_smbus_read_byte_data(smb->client, reg);
+
 	if (ret < 0)
-		dev_warn(&smb->client->dev, "failed to read reg 0x%x: %d\n",
-			 reg, ret);
+	{
+		for(retry = 0; retry < I2C_RETRY_TIMES; retry++)
+		{
+			msleep(20);
+			ret = i2c_smbus_read_byte_data(smb->client, reg);
+			pr_info("%s i2c retry %d, reg 0x%x, ret 0x=%x\n", __FUNCTION__, retry, reg, ret);
+			if (ret < 0)
+				continue;
+			else
+				break;
+		}
+	}
+
 	return ret;
 }
 
 static int smb347_write(struct smb347_charger *smb, u8 reg, u8 val)
 {
-	int ret;
+	int retry, ret;
 
 	ret = i2c_smbus_write_byte_data(smb->client, reg, val);
+
 	if (ret < 0)
-		dev_warn(&smb->client->dev, "failed to write reg 0x%x: %d\n",
-			 reg, ret);
+	{
+		for(retry = 0; retry < I2C_RETRY_TIMES; retry++)
+		{
+			msleep(20);
+			ret = i2c_smbus_write_byte_data(smb->client, reg, val);
+			pr_info("%s i2c retry %d, reg 0x%x, ret 0x=%x\n", __FUNCTION__, retry, reg, ret);
+			if (ret < 0)
+				continue;
+			else
+				break;
+		}
+	}
+
 	return ret;
 }
 
@@ -1409,7 +1443,8 @@ void smb347_early_suspend(struct early_suspend *h)
 	const struct smb347_charger_platform_data *pdata = the_chip->pdata;
 
 	pr_info("%s: enter\n", __func__);
-	
+	the_chip->is_early_suspend = true;
+
 	if(!((wakelock_smb_count) || (smb347_is_online(the_chip)))){
 		pdata->enable_power(0);
 		the_chip->is_suspend = true;
@@ -1422,6 +1457,7 @@ void smb347_late_resume(struct early_suspend *h)
 	const struct smb347_charger_platform_data *pdata = the_chip->pdata;
 
 	pr_info("%s: enter\n", __func__);
+	the_chip->is_early_suspend = false;
 
 	if(the_chip->is_suspend){
 		pdata->enable_power(1);
