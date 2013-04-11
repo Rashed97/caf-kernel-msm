@@ -101,7 +101,7 @@
 #define ZERO_DEGREE_CELSIUS_IN_TENTH_KELVIN   (-2731)
 #define BQ27541_INIT_DELAY   ((HZ)*1)
 
-#define	BATT_POLLING_TIME		(10 * HZ)
+#define	BATT_POLLING_TIME		(20 * HZ)
 #define POWER_SUPPLY_BOOT_CAPACITY	100
 #define I2C_RETRY_TIMES			10
 
@@ -572,20 +572,24 @@ static void msm_battery_update_psy_status(void)
 
   	wake_lock(&bq27541_lock);
 	regulator_enable(regulator_lvs2);
-	msleep(500);
+	msleep(200);
 	charge_current = (short) bq27541_get_battery_current();
+	udelay(100);
+	battery_temperature = bq27541_get_battery_temperature();
 	udelay(100);
 	battery_mvolts = bq27541_get_battery_mvolts();
 	udelay(100);
 	battery_capacity = bq27541_get_battery_capacity();	
 	udelay(100);
-	battery_temperature = bq27541_get_battery_temperature();
-	udelay(100);
+
 	regulator_disable(regulator_lvs2);
 	wake_unlock(&bq27541_lock);
 
 	printk("%s mvolts=%d capacity=%d temperature=%d charge_current=%d\n", __FUNCTION__,
 		(int) battery_mvolts, (int) battery_capacity, (int) battery_temperature, (short) charge_current);
+
+	if ((battery_mvolts < 3150000) || (battery_capacity <= 0))
+		pm_power_off();
 
 	queue_delayed_work(bq27541_di->battery_queue, &(bq27541_di->battery_work), BATT_POLLING_TIME);
 }
