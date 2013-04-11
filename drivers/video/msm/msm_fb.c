@@ -1505,6 +1505,7 @@ static int msm_fb_register(struct msm_fb_data_type *mfd)
 		if (!fbopen_internal_cnt) {
 			printk("%s: fbopen_internal_cnt = %d\n", __func__, fbopen_internal_cnt);
 			msm_fb_open(fbi, 0);
+			mdelay(150);
 			msm_fb_set_backlight(mfd, 150);
 			fbopen_internal_cnt++;
 		}
