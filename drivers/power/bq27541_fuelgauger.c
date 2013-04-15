@@ -109,6 +109,7 @@ int battery_mvolts;
 int battery_capacity;
 int battery_temperature;
 short charge_current;
+extern int pm8921_is_usb_chg_plugged_in(void);
 
 /* If the system has several batteries we need a different name for each
  * of them...
@@ -564,7 +565,8 @@ static struct platform_device this_device = {
 
 static void msm_battery_update_psy_status(void)
 {
-	
+	bool charge	= false;
+
 	if(bq27541_di->power_cable_boot){
 		battery_capacity = POWER_SUPPLY_BOOT_CAPACITY;
 		return;
@@ -583,15 +585,20 @@ static void msm_battery_update_psy_status(void)
 	udelay(100);
 
 	regulator_disable(regulator_lvs2);
-	wake_unlock(&bq27541_lock);
 
 	printk("%s mvolts=%d capacity=%d temperature=%d charge_current=%d\n", __FUNCTION__,
 		(int) battery_mvolts, (int) battery_capacity, (int) battery_temperature, (short) charge_current);
 
-	if ((battery_mvolts < 3150000) || (battery_capacity <= 0))
+	charge = pm8921_is_usb_chg_plugged_in();
+	if (charge == -EINVAL)
+		charge = 0;
+
+	if (((battery_mvolts < 3150000) || (battery_capacity <= 0)) && (!charge))
 		pm_power_off();
 
 	queue_delayed_work(bq27541_di->battery_queue, &(bq27541_di->battery_work), BATT_POLLING_TIME);
+
+	wake_unlock(&bq27541_lock);
 }
 
 static void msm_battery_worker(struct work_struct *work)
