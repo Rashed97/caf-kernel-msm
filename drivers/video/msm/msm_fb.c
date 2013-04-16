@@ -185,7 +185,7 @@ static void msm_fb_set_bl_brightness(struct led_classdev *led_cdev,
 	/* This maps android backlight level 0 to 255 into
 	   driver backlight level 0 to bl_max with rounding */
 	bl_lvl = (2 * value * mfd->panel_info.bl_max + MAX_BACKLIGHT_BRIGHTNESS)
-		/(2 * MAX_BACKLIGHT_BRIGHTNESS);
+		/(6 * MAX_BACKLIGHT_BRIGHTNESS);
 
 	if (!bl_lvl && value)
 		bl_lvl = 0;
@@ -1517,7 +1517,7 @@ static int msm_fb_register(struct msm_fb_data_type *mfd)
 			printk("%s: fbopen_internal_cnt = %d\n", __func__, fbopen_internal_cnt);
 			msm_fb_open(fbi, 0);
 			mdelay(150);
-			msm_fb_set_backlight(mfd, 150);
+			msm_fb_set_backlight(mfd, 35);
 			fbopen_internal_cnt++;
 		}
 	}
