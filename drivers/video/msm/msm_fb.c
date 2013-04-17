@@ -41,6 +41,7 @@
 #include <linux/android_pmem.h>
 #include <linux/leds.h>
 #include <linux/pm_runtime.h>
+#include <mach/msm_smsm.h>
 
 #define MSM_FB_C
 #include "msm_fb.h"
@@ -171,6 +172,9 @@ int msm_fb_cursor(struct fb_info *info, struct fb_cursor *cursor)
 static int msm_fb_resource_initialized;
 
 #ifndef CONFIG_FB_BACKLIGHT
+
+extern int power_on_mode;
+
 static int lcd_backlight_registered;
 
 static void msm_fb_set_bl_brightness(struct led_classdev *led_cdev,
@@ -178,14 +182,24 @@ static void msm_fb_set_bl_brightness(struct led_classdev *led_cdev,
 {
 	struct msm_fb_data_type *mfd = dev_get_drvdata(led_cdev->dev->parent);
 	int bl_lvl;
+	unsigned int boot_reason;
+	unsigned smem_size;
+
+	boot_reason = *(unsigned int *)(smem_get_entry(SMEM_POWER_ON_STATUS_INFO, &smem_size));
 
 	if (value > MAX_BACKLIGHT_BRIGHTNESS)
 		value = MAX_BACKLIGHT_BRIGHTNESS;
 
 	/* This maps android backlight level 0 to 255 into
 	   driver backlight level 0 to bl_max with rounding */
+	if((power_on_mode != 0x77665501) && (boot_reason == 0x20)){
 	bl_lvl = (2 * value * mfd->panel_info.bl_max + MAX_BACKLIGHT_BRIGHTNESS)
 		/(6 * MAX_BACKLIGHT_BRIGHTNESS);
+	}
+	else{
+	bl_lvl = (2 * value * mfd->panel_info.bl_max + MAX_BACKLIGHT_BRIGHTNESS)
+		/(2 * MAX_BACKLIGHT_BRIGHTNESS);
+	}
 
 	if (!bl_lvl && value)
 		bl_lvl = 0;
