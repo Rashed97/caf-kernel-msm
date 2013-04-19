@@ -254,10 +254,6 @@ void smb347_charger_vbus_draw(unsigned int mA)
 			charge = 0;
 
 		if (!charge){
-				if (wakelock_smb_count == true){
-					wake_unlock(&smb_lock);
-					wakelock_smb_count = false;
-				}
 				the_chip->mains_online = 0;
 				the_chip->usb_online = 0;
 				the_chip->charger_type_flags = POWER_SUPPLY_CHARGER_REMOVE;
@@ -272,6 +268,10 @@ void smb347_charger_vbus_draw(unsigned int mA)
 					the_chip->is_suspend = true;
 					pr_info("power off smb347\n");
 				}	
+				if (wakelock_smb_count == true){
+					wake_unlock(&smb_lock);
+					wakelock_smb_count = false;
+				}
 		}
 	}
 }
