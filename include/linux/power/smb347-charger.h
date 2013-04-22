@@ -21,6 +21,9 @@
 #define IDEV_CHG_MIN	500
 #define IUNIT		100
 
+/* Turn on USB_IF for average current test, but smb347 will not longer support car charging.*/
+//#define USB_IF
+
 extern int pm8921_is_usb_chg_plugged_in(void);
 //extern int pm8921_is_dc_chg_plugged_in(void);
 

@@ -1088,7 +1088,7 @@ static int msm_otg_notify_chg_type(struct msm_otg *motg)
 	power_supply_set_supply_type(psy, charger_type);
 	return 0;
 }
-
+#ifndef CONFIG_CHARGER_SMB347
 static int msm_otg_notify_power_supply(struct msm_otg *motg, unsigned mA)
 {
 
@@ -1115,6 +1115,7 @@ psy_not_supported:
 	dev_dbg(motg->phy.dev, "Power Supply doesn't support USB charger\n");
 	return -ENXIO;
 }
+#endif
 
 static void msm_otg_notify_charger(struct msm_otg *motg, unsigned mA)
 {
@@ -1138,15 +1139,23 @@ static void msm_otg_notify_charger(struct msm_otg *motg, unsigned mA)
 	if (motg->cur_power == mA)
 		return;
 
-	dev_info(motg->phy.dev, "Avail curr from USB = %u\n", mA);
+#ifdef CONFIG_CHARGER_SMB347
+	if (!mA){
+		if ((motg->chg_state == USB_CHG_STATE_UNDEFINED) && (motg->chg_type == USB_INVALID_CHARGER))
+			mA = 0;
+		else
+			mA = 100;
+	}
+#endif
 
+	dev_info(motg->phy.dev, "Avail curr from USB = %u\n", mA);
+		
 	/*
 	 *  Use Power Supply API if supported, otherwise fallback
 	 *  to legacy pm8921 API.
 	 */
-
-	if (msm_otg_notify_power_supply(motg, mA))
 #ifndef CONFIG_CHARGER_SMB347
+	if (msm_otg_notify_power_supply(motg, mA))
 		pm8921_charger_vbus_draw(mA);
 #else
 		smb347_charger_vbus_draw(mA);
@@ -2311,8 +2320,13 @@ static void msm_otg_sm_work(struct work_struct *w)
 						OTG_STATE_B_PERIPHERAL;
 					break;
 				case USB_SDP_CHARGER:
-					msm_otg_notify_charger(motg,
-							IDEV_CHG_MIN);
+#ifdef CONFIG_CHARGER_SMB347
+	#ifdef USB_IF
+					msm_otg_notify_charger(motg, 0);
+	#else
+					msm_otg_notify_charger(motg, 500);
+	#endif
+#endif
 					msm_otg_start_peripheral(otg, 1);
 					otg->phy->state =
 						OTG_STATE_B_PERIPHERAL;

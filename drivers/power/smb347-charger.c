@@ -223,14 +223,15 @@ static const unsigned int ccc_tbl[] = {
 struct smb347_charger *the_chip;
 static struct wake_lock smb_lock;
 static bool wakelock_smb_count;
+static unsigned int charging_current;
 
 /* USB calls these to tell us how much max usb current the system can draw */
 void smb347_charger_vbus_draw(unsigned int mA)
 {
-	bool charge	= false;
 	const struct smb347_charger_platform_data *pdata = the_chip->pdata;
+	charging_current = mA;
 
-	pr_debug("Enter charge=%d\n", mA);
+	pr_info("%s Enter charge=%d\n", __FUNCTION__, mA);	
 
 	if (mA == IDEV_CHG_MIN){
 		the_chip->charger_type_flags = POWER_SUPPLY_CHARGER_USB;
@@ -248,31 +249,26 @@ void smb347_charger_vbus_draw(unsigned int mA)
 		wakelock_smb_count = true;
 		wake_lock(&smb_lock);
 	}
-	else{
-		charge = pm8921_is_usb_chg_plugged_in();
-		if (charge == -EINVAL)
-			charge = 0;
+	else {
+		the_chip->mains_online = 0;
+		the_chip->usb_online = 0;
+		the_chip->charger_type_flags = POWER_SUPPLY_CHARGER_REMOVE;
+                power_supply_set_online(&the_chip->mains, the_chip->mains_online);
+                power_supply_set_online(&the_chip->usb, the_chip->usb_online);
+                power_supply_changed(&the_chip->mains);
+                power_supply_changed(&the_chip->usb);
+		power_supply_changed(&the_chip->battery);
 
-		if (!charge){
-				the_chip->mains_online = 0;
-				the_chip->usb_online = 0;
-				the_chip->charger_type_flags = POWER_SUPPLY_CHARGER_REMOVE;
-                                power_supply_set_online(&the_chip->mains, the_chip->mains_online);
-                                power_supply_set_online(&the_chip->usb, the_chip->usb_online);
-                                power_supply_changed(&the_chip->mains);
-                                power_supply_changed(&the_chip->usb);
-				power_supply_changed(&the_chip->battery);
-
-				if(the_chip->is_early_suspend){
-					pdata->enable_power(0);
-					the_chip->is_suspend = true;
-					pr_info("power off smb347\n");
-				}	
-				if (wakelock_smb_count == true){
-					wake_unlock(&smb_lock);
-					wakelock_smb_count = false;
-				}
+		if(the_chip->is_early_suspend){
+			pdata->enable_power(0);
+			the_chip->is_suspend = true;
+			pr_info("power off smb347\n");
 		}
+
+		if (wakelock_smb_count == true){
+			wake_unlock(&smb_lock);
+			wakelock_smb_count = false;
+		}	
 	}
 }
 EXPORT_SYMBOL_GPL(smb347_charger_vbus_draw);
@@ -341,6 +337,32 @@ static int smb347_write(struct smb347_charger *smb, u8 reg, u8 val)
 	return ret;
 }
 
+static int smb347_suspend(bool val)
+{
+	int ret;
+	the_chip->charging_enabled = val;
+        ret = smb347_read(the_chip, CMD_A);
+
+	if (!the_chip->charging_enabled)
+        	ret |= CMD_A_SUSPEND_ENABLED;
+	else
+        	ret &= ~CMD_A_SUSPEND_ENABLED;
+
+        ret = smb347_write(the_chip, CMD_A, ret);
+
+	return 0;
+}
+
+static int smb347_enable_set(void *data, u64 val)
+{
+	return smb347_suspend(val);
+}
+
+static int smb347_enable_get(void *data, u64 *val)
+{
+	*val = the_chip->charging_enabled;
+	return 0;
+}
 
 /*
  * smb347_set_writable - enables/disables writing to non-volatile registers
@@ -372,6 +394,8 @@ void update_charger_type(struct smb347_charger *smb)
 	int ret, cfg_ret, cmd_ret;
 	const struct smb347_charger_platform_data *pdata = smb->pdata;
 	static bool charging_gpio = false;
+
+	smb347_suspend(1);
 
 	ret = smb347_set_writable(smb, true);
 	if (ret < 0)
@@ -405,6 +429,8 @@ void update_charger_type(struct smb347_charger *smb)
 			pdata->enable_charging(0);
 			charging_gpio = false;
 		}
+		if((!charging_current) || (charging_current == 2))
+			smb347_suspend(0);
 	}
 
 	/* Disable Automatic Power Source Detection (APSD) interrupt. */
@@ -1396,30 +1422,6 @@ static const struct file_operations smb347_debugfs_fops = {
 	.llseek		= seq_lseek,
 	.release        = single_release,
 };
-
-static int smb347_enable_set(void *data, u64 val)
-{
-	int ret;
-
-	the_chip->charging_enabled = val;
-
-        ret = smb347_read(the_chip, CMD_A);
-
-	if (!the_chip->charging_enabled)
-        	ret |= CMD_A_SUSPEND_ENABLED;
-	else
-        	ret &= ~CMD_A_SUSPEND_ENABLED;
-
-        ret = smb347_write(the_chip, CMD_A, ret);
-
-	return 0;
-}
-
-static int smb347_enable_get(void *data, u64 *val)
-{
-	*val = the_chip->charging_enabled;
-	return 0;
-}
 
 DEFINE_SIMPLE_ATTRIBUTE(smb_enable_fops, smb347_enable_get,
 			smb347_enable_set, "%llu\n");
