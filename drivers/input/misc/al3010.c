@@ -416,8 +416,8 @@ static ssize_t al3010_store_delay(struct device *dev,
 
 	if (val > 1000000000)
 		val = 1000000000;
-	else if (val < 1000000)
-		val = 1000000;
+	else if (val < 100000000)
+		val = 100000000;
 
 	atomic_set(&data->delay, (int)val/1000000);
 
