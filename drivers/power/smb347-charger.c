@@ -228,6 +228,7 @@ static unsigned int charging_current;
 /* USB calls these to tell us how much max usb current the system can draw */
 void smb347_charger_vbus_draw(unsigned int mA)
 {
+	bool charge     = false;
 	const struct smb347_charger_platform_data *pdata = the_chip->pdata;
 	charging_current = mA;
 
@@ -259,13 +260,18 @@ void smb347_charger_vbus_draw(unsigned int mA)
                 power_supply_changed(&the_chip->usb);
 		power_supply_changed(&the_chip->battery);
 
-		if(the_chip->is_early_suspend){
-			pdata->enable_power(0);
-			the_chip->is_suspend = true;
-			pr_info("power off smb347\n");
-		}
+		if ((wakelock_smb_count) && (!mA)) {
 
-		if (wakelock_smb_count == true){
+		        charge = pm8921_is_usb_chg_plugged_in();
+	               	if (charge == -EINVAL)
+				charge = 0;
+
+			if((the_chip->is_early_suspend) && (!charge)){
+				pdata->enable_power(0);
+				mdelay(200);
+				the_chip->is_suspend = true;
+				pr_info("power off smb347\n");
+			}
 			wake_unlock(&smb_lock);
 			wakelock_smb_count = false;
 		}	
@@ -1245,14 +1251,12 @@ static int smb347_battery_get_property(struct power_supply *psy,
 
 	switch (prop) {
 	case POWER_SUPPLY_PROP_STATUS:
-		if (!smb347_is_online(smb)) {
-			val->intval = POWER_SUPPLY_STATUS_DISCHARGING;
-			break;
-		}
-		if (smb347_charging_status(smb))
+		if (battery_capacity == 100)
+			val->intval = POWER_SUPPLY_STATUS_FULL;
+		else if (charge)
 			val->intval = POWER_SUPPLY_STATUS_CHARGING;
 		else
-			val->intval = POWER_SUPPLY_STATUS_FULL;
+			val->intval = POWER_SUPPLY_STATUS_DISCHARGING;
 		break;
 
 	case POWER_SUPPLY_PROP_HEALTH:
