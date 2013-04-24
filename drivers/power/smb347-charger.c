@@ -266,7 +266,7 @@ void smb347_charger_vbus_draw(unsigned int mA)
 	               	if (charge == -EINVAL)
 				charge = 0;
 
-			if((the_chip->is_early_suspend) && (!charge)){
+			if((the_chip->is_early_suspend) && (!charge) && (!(the_chip->is_suspend))){
 				pdata->enable_power(0);
 				mdelay(200);
 				the_chip->is_suspend = true;
@@ -1251,7 +1251,7 @@ static int smb347_battery_get_property(struct power_supply *psy,
 
 	switch (prop) {
 	case POWER_SUPPLY_PROP_STATUS:
-		if (battery_capacity == 100)
+		if ((charge) && (battery_capacity == 100))
 			val->intval = POWER_SUPPLY_STATUS_FULL;
 		else if (charge)
 			val->intval = POWER_SUPPLY_STATUS_CHARGING;
