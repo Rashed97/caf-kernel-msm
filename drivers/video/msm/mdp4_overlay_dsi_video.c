@@ -45,6 +45,9 @@ static int dsi_video_enabled;
 
 #define MAX_CONTROLLER	1
 
+static int need_dsi_sw_reset=0;
+
+
 static struct vsycn_ctrl {
 	struct device *dev;
 	int inited;
@@ -552,6 +555,9 @@ int mdp4_dsi_video_on(struct platform_device *pdev)
 	int cndx = 0;
 	struct vsycn_ctrl *vctrl;
 	struct msm_panel_info *pinfo;
+	
+	need_dsi_sw_reset=1; 
+
 
 	vctrl = &vsync_ctrl_db[cndx];
 	mfd = (struct msm_fb_data_type *)platform_get_drvdata(pdev);
@@ -986,6 +992,16 @@ void mdp4_dmap_done_dsi_video(int cndx)
 	}
 	vctrl = &vsync_ctrl_db[cndx];
 	pipe = vctrl->base_pipe;
+	
+	if(need_dsi_sw_reset){ 
+	need_dsi_sw_reset=0; 
+	MDP_OUTP(MDP_BASE + DSI_VIDEO_BASE, 0); 
+	mdelay(1); 
+	mipi_dsi_sw_reset(); 
+	MDP_OUTP(MDP_BASE + DSI_VIDEO_BASE, 1); 
+	pr_err("j:%s %d dsi sw reset test\n", __func__, __LINE__); 
+	} 
+
 
 	spin_lock(&vctrl->spin_lock);
 	vsync_irq_disable(INTR_DMA_P_DONE, MDP_DMAP_TERM);
