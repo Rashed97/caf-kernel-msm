@@ -498,7 +498,8 @@ static int smb347_update_status(struct smb347_charger *smb)
         if ((smb->usb_online != usb) || (smb->mains_online != dc))
 		ret = 1;
 
-	update_charger_type(smb);
+	if (!(smb->is_suspend))
+		update_charger_type(smb);
 
 	mutex_unlock(&smb->lock);
 
