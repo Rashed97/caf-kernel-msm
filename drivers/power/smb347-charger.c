@@ -346,10 +346,10 @@ static int smb347_write(struct smb347_charger *smb, u8 reg, u8 val)
 static int smb347_suspend(bool val)
 {
 	int ret;
-	the_chip->charging_enabled = val;
+
         ret = smb347_read(the_chip, CMD_A);
 
-	if (!the_chip->charging_enabled)
+	if (!val)
         	ret |= CMD_A_SUSPEND_ENABLED;
 	else
         	ret &= ~CMD_A_SUSPEND_ENABLED;
@@ -361,6 +361,7 @@ static int smb347_suspend(bool val)
 
 static int smb347_enable_set(void *data, u64 val)
 {
+	the_chip->charging_enabled = val;
 	return smb347_suspend(val);
 }
 
@@ -401,7 +402,8 @@ void update_charger_type(struct smb347_charger *smb)
 	const struct smb347_charger_platform_data *pdata = smb->pdata;
 	static bool charging_gpio = false;
 
-	smb347_suspend(1);
+	if (smb->charging_enabled)
+		smb347_suspend(1);
 
 	ret = smb347_set_writable(smb, true);
 	if (ret < 0)
@@ -435,8 +437,10 @@ void update_charger_type(struct smb347_charger *smb)
 			pdata->enable_charging(0);
 			charging_gpio = false;
 		}
+#ifdef USB_IF
 		if((!charging_current) || (charging_current == 2))
 			smb347_suspend(0);
+#endif
 	}
 
 	/* Disable Automatic Power Source Detection (APSD) interrupt. */
@@ -494,8 +498,7 @@ static int smb347_update_status(struct smb347_charger *smb)
         if ((smb->usb_online != usb) || (smb->mains_online != dc))
 		ret = 1;
 
-	if (!(smb->is_suspend))
-		update_charger_type(smb);
+	update_charger_type(smb);
 
 	mutex_unlock(&smb->lock);
 
