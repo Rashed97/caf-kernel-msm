@@ -109,6 +109,7 @@ int battery_mvolts;
 int battery_capacity;
 int battery_temperature;
 short charge_current;
+int shutdown_counter;
 extern int pm8921_is_usb_chg_plugged_in(void);
 
 /* If the system has several batteries we need a different name for each
@@ -400,6 +401,7 @@ static void bq27541_hw_config(struct work_struct *work)
 
 	di  = container_of(work, struct bq27541_device_info, hw_config.work);
 	di->power_cable_boot = false;
+	shutdown_counter = 0;
 
 	ret = bq27541_chip_config(di);
 	if (ret) {
@@ -593,8 +595,14 @@ static void msm_battery_update_psy_status(void)
 	if (charge == -EINVAL)
 		charge = 0;
 
-	if (((battery_mvolts < 3150000) || (battery_capacity <= 0)) && (!charge))
-		pm_power_off();
+	if (((battery_mvolts < 3150000) || (battery_capacity <= 0)) && (!charge)){
+		shutdown_counter++;
+		pr_info("%s: shutdown_counter = %d\n", __FUNCTION__, shutdown_counter);
+		if(!(shutdown_counter%5))
+			pm_power_off();
+	}
+	else
+		shutdown_counter = 0;
 
 	queue_delayed_work(bq27541_di->battery_queue, &(bq27541_di->battery_work), BATT_POLLING_TIME);
 
