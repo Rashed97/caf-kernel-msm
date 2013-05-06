@@ -24,6 +24,10 @@
 #include <linux/i2c/isa1200.h>
 #include "../staging/android/timed_output.h"
 
+#ifdef CONFIG_HAS_EARLYSUSPEND
+#include <linux/earlysuspend.h>
+#endif
+
 #define ISA1200_HCTRL0		0x30
 #define ISA1200_HCTRL1		0x31
 #define ISA1200_HCTRL5		0x35
@@ -34,6 +38,8 @@
 #define ISA1200_HCTRL5_VIB_STRT	0xD5
 #define ISA1200_HCTRL5_VIB_STOP	0x6B
 #define ISA1200_POWER_DOWN_MASK 0x7F
+
+struct isa1200_chip *this_chip;
 
 struct isa1200_chip {
 	struct i2c_client *client;
@@ -50,6 +56,9 @@ struct isa1200_chip {
 	bool clk_on;
 	u8 hctrl0_val;
 	struct clk *pwm_clk;
+#ifdef CONFIG_HAS_EARLYSUSPEND
+	struct	early_suspend early_suspend;
+#endif
 };
 
 static int isa1200_read_reg(struct i2c_client *client, int reg)
@@ -438,6 +447,59 @@ put_regs:
 	return rc;
 }
 
+#ifdef CONFIG_HAS_EARLYSUSPEND
+void isa1200_suspend(struct early_suspend *h)
+{
+	struct isa1200_chip *haptic = this_chip;
+	int ret;
+
+	hrtimer_cancel(&haptic->timer);
+	cancel_work_sync(&haptic->work);
+	/* turn-off current vibration */
+	isa1200_vib_set(haptic, 0);
+
+	gpio_set_value_cansleep(haptic->pdata->hap_en_gpio, 0);
+	if (haptic->is_len_gpio_valid == true)
+		gpio_set_value_cansleep(haptic->pdata->hap_len_gpio, 0);
+
+	if (haptic->pdata->regulator_info)
+		isa1200_reg_power(haptic, false);
+
+	if (haptic->pdata->power_on) {
+		ret = haptic->pdata->power_on(0);
+		if (ret) {
+			pr_info("%s power-down failed\n", __FUNCTION__);
+			return;
+		}
+	}
+
+	return;
+}
+
+void isa1200_resume(struct early_suspend *h)
+{
+	struct isa1200_chip *haptic = this_chip;
+	int ret;
+
+	if (haptic->pdata->regulator_info)
+		isa1200_reg_power(haptic, true);
+
+	if (haptic->pdata->power_on) {
+		ret = haptic->pdata->power_on(1);
+		if (ret) {
+			pr_info("%s power-up failed\n", __FUNCTION__);
+			return ;
+		}
+	}
+
+	isa1200_setup(haptic->client);
+	return ;
+}
+#else
+#define isa1200_suspend		NULL
+#define isa1200_resume		NULL
+#endif
+
 static int __devinit isa1200_probe(struct i2c_client *client,
 			const struct i2c_device_id *id)
 {
@@ -467,6 +529,8 @@ static int __devinit isa1200_probe(struct i2c_client *client,
 	}
 
 	haptic = kzalloc(sizeof(struct isa1200_chip), GFP_KERNEL);
+	this_chip = kzalloc(sizeof(struct isa1200_chip), GFP_KERNEL);
+
 	if (!haptic) {
 		ret = -ENOMEM;
 		goto mem_alloc_fail;
@@ -474,6 +538,8 @@ static int __devinit isa1200_probe(struct i2c_client *client,
 	haptic->client = client;
 	haptic->enable = 0;
 	haptic->pdata = pdata;
+
+	this_chip = haptic;
 
 	if (pdata->regulator_info) {
 		ret = isa1200_reg_setup(haptic, true);
@@ -583,6 +649,13 @@ static int __devinit isa1200_probe(struct i2c_client *client,
 		}
 	}
 
+#ifdef CONFIG_HAS_EARLYSUSPEND
+	haptic->early_suspend.level = EARLY_SUSPEND_LEVEL_STOP_DRAWING;
+	haptic->early_suspend.suspend = isa1200_suspend;
+	haptic->early_suspend.resume = isa1200_resume;
+	register_early_suspend(&haptic->early_suspend);
+#endif
+
 	printk(KERN_INFO "%s: %s registered\n", __func__, id->name);
 	return 0;
 
@@ -670,59 +743,6 @@ static int __devexit isa1200_remove(struct i2c_client *client)
 	return 0;
 }
 
-#ifdef CONFIG_PM
-static int isa1200_suspend(struct i2c_client *client, pm_message_t mesg)
-{
-	struct isa1200_chip *haptic = i2c_get_clientdata(client);
-	int ret;
-
-	hrtimer_cancel(&haptic->timer);
-	cancel_work_sync(&haptic->work);
-	/* turn-off current vibration */
-	isa1200_vib_set(haptic, 0);
-
-	gpio_set_value_cansleep(haptic->pdata->hap_en_gpio, 0);
-	if (haptic->is_len_gpio_valid == true)
-		gpio_set_value_cansleep(haptic->pdata->hap_len_gpio, 0);
-
-	if (haptic->pdata->regulator_info)
-		isa1200_reg_power(haptic, false);
-
-	if (haptic->pdata->power_on) {
-		ret = haptic->pdata->power_on(0);
-		if (ret) {
-			dev_err(&client->dev, "power-down failed\n");
-			return ret;
-		}
-	}
-
-	return 0;
-}
-
-static int isa1200_resume(struct i2c_client *client)
-{
-	struct isa1200_chip *haptic = i2c_get_clientdata(client);
-	int ret;
-
-	if (haptic->pdata->regulator_info)
-		isa1200_reg_power(haptic, true);
-
-	if (haptic->pdata->power_on) {
-		ret = haptic->pdata->power_on(1);
-		if (ret) {
-			dev_err(&client->dev, "power-up failed\n");
-			return ret;
-		}
-	}
-
-	isa1200_setup(client);
-	return 0;
-}
-#else
-#define isa1200_suspend		NULL
-#define isa1200_resume		NULL
-#endif
-
 static const struct i2c_device_id isa1200_id[] = {
 	{ "isa1200_1", 0 },
 	{ },
@@ -735,8 +755,6 @@ static struct i2c_driver isa1200_driver = {
 	},
 	.probe		= isa1200_probe,
 	.remove		= __devexit_p(isa1200_remove),
-	.suspend	= isa1200_suspend,
-	.resume		= isa1200_resume,
 	.id_table	= isa1200_id,
 };
 
