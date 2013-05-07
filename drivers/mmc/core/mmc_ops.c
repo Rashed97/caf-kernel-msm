@@ -21,6 +21,7 @@
 #include "core.h"
 #include "mmc_ops.h"
 
+#define EMMC_4_4
 static int _mmc_select_card(struct mmc_host *host, struct mmc_card *card)
 {
 	int err;
@@ -59,6 +60,7 @@ int mmc_deselect_cards(struct mmc_host *host)
 
 int mmc_card_sleepawake(struct mmc_host *host, int sleep)
 {
+#ifndef EMMC_4_4 /* NOT USE EMMC_4_4 */
 	struct mmc_command cmd = {0};
 	struct mmc_card *card = host->card;
 	int err;
@@ -89,6 +91,9 @@ int mmc_card_sleepawake(struct mmc_host *host, int sleep)
 		err = mmc_select_card(card);
 
 	return err;
+#else /* USE EMMC_4_4 */
+	return 0;
+#endif
 }
 
 int mmc_go_idle(struct mmc_host *host)
