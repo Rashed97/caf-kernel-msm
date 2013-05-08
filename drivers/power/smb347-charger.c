@@ -268,7 +268,6 @@ void smb347_charger_vbus_draw(unsigned int mA)
 
 			if((the_chip->is_early_suspend) && (!charge) && (!(the_chip->is_suspend))){
 				pdata->enable_power(0);
-				mdelay(200);
 				the_chip->is_suspend = true;
 				pr_info("power off smb347\n");
 			}
@@ -301,6 +300,9 @@ static int smb347_read(struct smb347_charger *smb, u8 reg)
 {
 	int retry, ret;
 
+	if (smb->is_suspend)
+		return 0;
+
 	ret = i2c_smbus_read_byte_data(smb->client, reg);
 
 	if (ret < 0)
@@ -323,6 +325,9 @@ static int smb347_read(struct smb347_charger *smb, u8 reg)
 static int smb347_write(struct smb347_charger *smb, u8 reg, u8 val)
 {
 	int retry, ret;
+
+	if (smb->is_suspend)
+		return 0;
 
 	ret = i2c_smbus_write_byte_data(smb->client, reg, val);
 
@@ -402,8 +407,10 @@ void update_charger_type(struct smb347_charger *smb)
 	const struct smb347_charger_platform_data *pdata = smb->pdata;
 	static bool charging_gpio = false;
 
+#ifdef USB_IF
 	if (smb->charging_enabled)
 		smb347_suspend(1);
+#endif
 
 	ret = smb347_set_writable(smb, true);
 	if (ret < 0)
@@ -1474,6 +1481,7 @@ void smb347_late_resume(struct early_suspend *h)
 		msleep(200);
 		smb347_hw_init(the_chip);
 		the_chip->is_suspend = false;
+		smb347_update_status(the_chip);
 		pr_info("power on smb347\n");
 	}
 }
