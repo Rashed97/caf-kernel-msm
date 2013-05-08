@@ -21,7 +21,8 @@
 #include "core.h"
 #include "mmc_ops.h"
 
-#define EMMC_4_4
+u32 cid_num[4];
+
 static int _mmc_select_card(struct mmc_host *host, struct mmc_card *card)
 {
 	int err;
@@ -60,40 +61,40 @@ int mmc_deselect_cards(struct mmc_host *host)
 
 int mmc_card_sleepawake(struct mmc_host *host, int sleep)
 {
-#ifndef EMMC_4_4 /* NOT USE EMMC_4_4 */
 	struct mmc_command cmd = {0};
 	struct mmc_card *card = host->card;
 	int err;
 
-	if (sleep)
-		mmc_deselect_cards(host);
+	if(cid_num[0] == 0x90014a48 && cid_num[2] == 0x402){
+		if (sleep)
+			mmc_deselect_cards(host);
 
-	cmd.opcode = MMC_SLEEP_AWAKE;
-	cmd.arg = card->rca << 16;
-	if (sleep)
-		cmd.arg |= 1 << 15;
+		cmd.opcode = MMC_SLEEP_AWAKE;
+		cmd.arg = card->rca << 16;
+		if (sleep)
+			cmd.arg |= 1 << 15;
 
-	cmd.flags = MMC_RSP_R1B | MMC_CMD_AC;
-	err = mmc_wait_for_cmd(host, &cmd, 0);
-	if (err)
+		cmd.flags = MMC_RSP_R1B | MMC_CMD_AC;
+		err = mmc_wait_for_cmd(host, &cmd, 0);
+		if (err)
+			return err;
+
+		/*
+		 * If the host does not wait while the card signals busy, then we will
+		 * will have to wait the sleep/awake timeout.  Note, we cannot use the
+		 * SEND_STATUS command to poll the status because that command (and most
+		 * others) is invalid while the card sleeps.
+		 */
+		if (!(host->caps & MMC_CAP_WAIT_WHILE_BUSY))
+			mmc_delay(DIV_ROUND_UP(card->ext_csd.sa_timeout, 10000));
+
+		if (!sleep)
+			err = mmc_select_card(card);
+
 		return err;
-
-	/*
-	 * If the host does not wait while the card signals busy, then we will
-	 * will have to wait the sleep/awake timeout.  Note, we cannot use the
-	 * SEND_STATUS command to poll the status because that command (and most
-	 * others) is invalid while the card sleeps.
-	 */
-	if (!(host->caps & MMC_CAP_WAIT_WHILE_BUSY))
-		mmc_delay(DIV_ROUND_UP(card->ext_csd.sa_timeout, 10000));
-
-	if (!sleep)
-		err = mmc_select_card(card);
-
-	return err;
-#else /* USE EMMC_4_4 */
-	return 0;
-#endif
+	}
+	else
+		return 0;
 }
 
 int mmc_go_idle(struct mmc_host *host)
@@ -177,6 +178,7 @@ int mmc_all_send_cid(struct mmc_host *host, u32 *cid)
 {
 	int err;
 	struct mmc_command cmd = {0};
+	int i;
 
 	BUG_ON(!host);
 	BUG_ON(!cid);
@@ -190,6 +192,12 @@ int mmc_all_send_cid(struct mmc_host *host, u32 *cid)
 		return err;
 
 	memcpy(cid, cmd.resp, sizeof(u32) * 4);
+
+	if(cid[0] == 0x90014a48){
+		for(i = 0; i < 4; i++)
+			cid_num[i] = cid[i];
+	cid_num[2] = cid_num[2] >> 16;
+	}
 
 	return 0;
 }
