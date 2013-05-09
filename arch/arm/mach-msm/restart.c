@@ -198,9 +198,11 @@ static void msm_restart_prepare(const char *cmd)
 	set_dload_mode(in_panic);
 
 	/* Write download mode flags if restart_mode says so */
-	if (restart_mode == RESTART_DLOAD)
+	if (restart_mode == RESTART_DLOAD){
 		set_dload_mode(1);
-
+                //let the device go to download if mode is RESTART_DLOAD
+                download_mode = 1;
+        }
 	/* Kill download mode if master-kill switch is set */
 	if (!download_mode)
 		set_dload_mode(0);
