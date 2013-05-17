@@ -43,7 +43,9 @@
 #include <linux/memory.h>
 #include <linux/memblock.h>
 #include <linux/msm_thermal.h>
+#if defined(CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_RMI4_I2C) || defined(CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_RMI4_I2C_MODULE)
 #include <linux/input/synaptics_dsx.h>
+#endif
 
 #include <linux/slimbus/slimbus.h>
 #include <linux/mfd/wcd9xxx/core.h>
@@ -2058,36 +2060,190 @@ static struct i2c_board_info mxt_device_info_8930[] __initdata = {
 	},
 };
 
-/*»     Synaptics Thin Driver»  */
 
-#define CLEARPAD3202_ADDR 0x20
-#define CLEARPAD3202_ATTEN_GPIO (11)
-#define CLEARPAD3202_RESET_GPIO (52)
+/* 	Synaptics Thin Driver	*/
+#if defined(CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_RMI4_I2C) || defined(CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_RMI4_I2C_MODULE)
+#define S7300_ADDR	0x20
+#define S7020_ADDR	0x20
+#define TP_ATTN		11
+#define TP_RESET	52
 
-static unsigned char synaptic_rmi4_button_codes[] = {KEY_MENU, KEY_HOME,
-							KEY_BACK};
+#define TS_REGULATOR_L9       "vdd_ana"
+#define TS_REGULATOR_L11      "vdd_dig"
+#define TS_REGULATOR_LVS1     "ts_i2c"
+#define TS_REGULATOR_LVS2     "vcc_i2c"
 
-static struct synaptics_rmi4_capacitance_button_map synaptic_rmi4_button_map = {
-	.nbuttons = ARRAY_SIZE(synaptic_rmi4_button_codes),
-	.map = synaptic_rmi4_button_codes,
+static struct regulator_bulk_data regs_ts[] = {
+      { .supply = TS_REGULATOR_L9, .min_uV = 2850000, .max_uV = 2850000 },
+      { .supply = TS_REGULATOR_L11, .min_uV = 1800000, .max_uV = 1800000 },
+      { .supply = TS_REGULATOR_LVS1, .min_uV = 0, .max_uV = 0 },
+      { .supply = TS_REGULATOR_LVS2, .min_uV = 0, .max_uV = 0 },
 };
 
-static struct synaptics_rmi4_platform_data rmi4_platformdata = {
-	.irq_flags = IRQF_TRIGGER_FALLING,
-	.irq_gpio = CLEARPAD3202_ATTEN_GPIO,
-	.reset_gpio = CLEARPAD3202_RESET_GPIO,
-	.regulator_en = true,
-	.i2c_pull_up = true,
-	.capacitance_button_map = &synaptic_rmi4_button_map,
+static int synaptics_ts_power_on(bool on)
+{
+    int retval = on ?
+        regulator_bulk_enable(ARRAY_SIZE(regs_ts), regs_ts) :
+        regulator_bulk_disable(ARRAY_SIZE(regs_ts), regs_ts);
+
+    if (retval)
+        pr_err("%s: could not %sable regulators: %d\n",
+                __func__, on ? "en" : "dis", retval);
+    else
+        msleep(50);
+
+    return retval;
+}
+
+static int synaptics_request_regulator(struct device *dev)
+{
+    int retval;
+    retval = regulator_bulk_get(dev, ARRAY_SIZE(regs_ts), regs_ts);
+    if (retval) {
+        pr_err("%s: Failed to setup regulator Code: %d.",
+                __func__, retval);
+        goto err_regulator_bulk_get;
+    }
+
+    retval = regulator_bulk_set_voltage(ARRAY_SIZE(regs_ts), regs_ts);
+     if (retval) {
+         pr_err("%s: could not set voltages: %d\n",
+                 __func__, retval);
+         goto err_regulator_bukl_set_voltage;
+     }
+    return retval;
+
+err_regulator_bukl_set_voltage:
+    regulator_bulk_free(ARRAY_SIZE(regs_ts), regs_ts);
+err_regulator_bulk_get:
+    return retval;
+}
+
+static void synaptics_free_regulator(void)
+{
+    regulator_bulk_free(ARRAY_SIZE(regs_ts), regs_ts);
+}
+
+static int synaptics_request_gpios(void)
+{
+    int retval;
+    retval = gpio_request(TP_ATTN, "rmi4_attn");
+    if (retval) {
+        pr_err("%s: Failed to get attn gpio %d. Code: %d.",
+                __func__, TP_ATTN, retval);
+        goto err_gpio_request_atten;
+    }
+
+    retval = gpio_direction_input(TP_ATTN);
+    if (retval) {
+        pr_err("%s: Failed to setup attn gpio %d. Code: %d.",
+                __func__, TP_ATTN, retval);
+        goto err_gpio_direction_input_attn;
+    }
+
+    /* configure touchscreen reset gpio */
+    retval = gpio_request(TP_RESET, "touchscreen gpio reset");
+    if (retval) {
+        pr_err("%s: unable to request gpio %d\n",
+                __func__, TP_RESET);
+        goto tp_hardware_reset_tlmm_unconfig;
+    }
+
+    retval = gpio_direction_output(TP_RESET, 1);
+    if (retval < 0) {
+        pr_err("%s: unable to set the direction of gpio %d\n",
+                __func__, TP_RESET);
+        goto free_tp_hardware_reset;
+    }
+    return retval;
+free_tp_hardware_reset:
+    gpio_free(TP_RESET);
+tp_hardware_reset_tlmm_unconfig:
+    retval = gpio_direction_output(TP_ATTN, 0);
+err_gpio_direction_input_attn:
+    gpio_free(TP_ATTN);
+err_gpio_request_atten:
+    return retval;
+}
+
+static void synaptics_free_gpios(void)
+{
+    gpio_direction_output(TP_ATTN, 0);
+    gpio_direction_output(TP_RESET, 0);
+    gpio_free(TP_ATTN);
+    gpio_free(TP_RESET);
+}
+
+static int synaptics_platform_init(struct device *dev)
+{
+    int retval;
+    retval = synaptics_request_gpios();
+    if (retval < 0) {
+        pr_err("%s: unable to request gpio\n", __func__);
+        goto err_request_gpios;
+    }
+    retval = synaptics_request_regulator(dev);
+    if (retval < 0) {
+        pr_err("%s: unable to request regulator\n", __func__);
+        goto err_request_regulator;
+    }
+
+    return retval;
+err_request_regulator:
+err_request_gpios:
+    return retval;
+}
+
+static void synaptics_platform_exit(void)
+{
+    synaptics_free_gpios();
+    synaptics_free_regulator();
+}
+
+static void ts_hardware_reset(void)
+{
+    gpio_set_value(TP_RESET, 0);
+    usleep(10000);
+    gpio_set_value(TP_RESET, 1);
+    usleep(50000);
+}
+
+static unsigned char S7300_f1a_button_codes[] = {};
+
+static struct synaptics_rmi_f1a_button_map S7300_f1a_button_map = {
+    .nbuttons = ARRAY_SIZE(S7300_f1a_button_codes),
+    .map = S7300_f1a_button_codes,
 };
 
-static struct i2c_board_info rmi4_i2c_devices[] = {
-	{
-		I2C_BOARD_INFO("synaptics_rmi4_i2c",
-		CLEARPAD3202_ADDR),
-		.platform_data = &rmi4_platformdata,
-	},
+static struct synaptics_dsx_platform_data dsx_platformdata = {
+    .irq_type = IRQF_TRIGGER_FALLING,
+    .regulator_en = true,
+    .gpio = TP_ATTN,
+    .platform_init = synaptics_platform_init,
+    .platform_exit = synaptics_platform_exit,
+    .power_on = synaptics_ts_power_on,
+    .f1a_button_map = &S7300_f1a_button_map,
+    .hardware_reset = ts_hardware_reset,
+    .request_gpios = synaptics_request_gpios,
+    .request_regulator = synaptics_request_regulator,
+    .free_gpios = synaptics_free_gpios,
+    .free_regulator = synaptics_free_regulator,
 };
+static struct i2c_board_info bus2_i2c_devices[] = {
+#if defined(CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_RMI4_I2C) || defined(CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_RMI4_I2C_MODULE)
+     /* SYNAPTICS I2C */
+     {
+         I2C_BOARD_INFO("synaptics_7300", S7300_ADDR),
+         .platform_data = &dsx_platformdata,
+     },
+     {
+         I2C_BOARD_INFO("synaptics_7020", S7020_ADDR),
+         .platform_data = &dsx_platformdata,
+     },
+#endif
+};
+
+#endif
 
 #define MHL_POWER_GPIO_PM8038	PM8038_GPIO_PM_TO_SYS(MHL_GPIO_PWR_EN)
 #define MHL_POWER_GPIO_PM8917	PM8917_GPIO_PM_TO_SYS(25)
@@ -2800,10 +2956,10 @@ static struct i2c_registry msm8960_i2c_devices[] __initdata = {
 		ARRAY_SIZE(mxt_device_info_8930),
 	},
 	{
-		I2C_EVT,
+		I2C_SURF | I2C_FFA | I2C_FLUID,
 		MSM_8930_GSBI3_QUP_I2C_BUS_ID,
-		rmi4_i2c_devices,
-		ARRAY_SIZE(rmi4_i2c_devices),
+        bus2_i2c_devices,
+		ARRAY_SIZE(bus2_i2c_devices),
 	},
 	{
 		I2C_SURF | I2C_FFA | I2C_LIQUID | I2C_FLUID,
