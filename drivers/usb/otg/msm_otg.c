@@ -1153,7 +1153,8 @@ static void msm_otg_notify_charger(struct msm_otg *motg, unsigned mA)
 	 *  to legacy pm8921 API.
 	 */
 	if (msm_otg_notify_power_supply(motg, mA))
-		pm8921_charger_vbus_draw(mA);
+		return;
+	//	pm8921_charger_vbus_draw(mA);
 
 	motg->cur_power = mA;
 }
