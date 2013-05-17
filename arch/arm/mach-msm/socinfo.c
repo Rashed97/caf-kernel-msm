@@ -122,6 +122,8 @@ struct socinfo_v7 {
 	/* only valid when format==7 */
 	uint32_t pmic_model;
 	uint32_t pmic_die_revision;
+	uint32_t qrd_tablet_hw_platform;
+	uint32_t qrd_tablet_hw_platform_adc_num;
 };
 
 static union {
@@ -358,6 +360,12 @@ uint32_t socinfo_get_platform_version(void)
 	return socinfo ?
 		(socinfo->v1.format >= 4 ? socinfo->v4.platform_version : 0)
 		: 0;
+}
+
+uint32_t socinfo_get_qrd_tablet_platform(void)
+{
+       return socinfo->v7.qrd_tablet_hw_platform;
+
 }
 
 /* This information is directly encoded by the machine id */

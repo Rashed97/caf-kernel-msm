@@ -133,6 +133,7 @@ uint32_t socinfo_get_platform_subtype(void);
 uint32_t socinfo_get_platform_version(void);
 enum pmic_model socinfo_get_pmic_model(void);
 uint32_t socinfo_get_pmic_die_revision(void);
+uint32_t socinfo_get_qrd_tablet_platform(void);
 int __init socinfo_init(void) __must_check;
 const int read_msm_cpu_type(void);
 const int get_core_count(void);
@@ -140,6 +141,19 @@ const int cpu_is_krait(void);
 const int cpu_is_krait_v1(void);
 const int cpu_is_krait_v2(void);
 const int cpu_is_krait_v3(void);
+
+/* define Gigabyte HW version */
+//     QRD_TABLET_HW_PLATFORM_TYPE1     For 7" 3G+Wifi
+//     QRD_TABLET_HW_PLATFORM_TYPE2     For 10" 3G+Wifi
+
+#define QRD_TABLET_HW_PLATFORM_TYPE1  1001
+#define QRD_TABLET_HW_PLATFORM_TYPE2  1002
+#define QRD_TABLET_HW_PLATFORM_TYPE3  1003
+#define QRD_TABLET_HW_PLATFORM_TYPE4  1004
+
+#define qrd_tablet_hw_platform()           ( socinfo_get_qrd_tablet_platform() )
+#define machine_is_msm8x30_type1() ( socinfo_get_qrd_tablet_platform() == QRD_TABLET_HW_PLATFORM_TYPE1 )
+#define machine_is_msm8x30_type2() ( socinfo_get_qrd_tablet_platform() == QRD_TABLET_HW_PLATFORM_TYPE2 )
 
 static inline int cpu_is_msm7x01(void)
 {
