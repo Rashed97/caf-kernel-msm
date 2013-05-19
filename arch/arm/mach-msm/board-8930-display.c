@@ -24,6 +24,7 @@
 #include <mach/socinfo.h>
 #include <linux/msm_ion.h>
 #include <mach/ion.h>
+#include <../include/mach/socinfo.h>
 
 #include "devices.h"
 #include "board-8930.h"
@@ -61,6 +62,8 @@
 #define MIPI_VIDEO_NT_HD_PANEL_NAME		"mipi_video_nt35590_720p"
 #define HDMI_PANEL_NAME	"hdmi_msm"
 #define TVOUT_PANEL_NAME	"tvout_msm"
+#define MIPI_CHIMEI_HJ070NA_13A	"mipi_chimei_hj070na_13a"
+#define MIPI_CHIMEI_N101ICG_L21	"mipi_chimei_n101icg_l21"
 
 static struct resource msm_fb_resources[] = {
 	{
@@ -75,9 +78,21 @@ static int msm_fb_detect_panel(const char *name)
 			strnlen(MIPI_VIDEO_NT_HD_PANEL_NAME,
 				PANEL_NAME_MAX_LEN)))
 			return 0;
+	} else if (machine_is_msm8x30_type1()) {
+		if (!strncmp(name, MIPI_CHIMEI_HJ070NA_13A,
+				strnlen(MIPI_CHIMEI_HJ070NA_13A,
+				PANEL_NAME_MAX_LEN))) {
+			return 0;
+		}
+	} else if (machine_is_msm8x30_type2()) {
+		if (!strncmp(name, MIPI_CHIMEI_N101ICG_L21,
+				strnlen(MIPI_CHIMEI_N101ICG_L21,
+				PANEL_NAME_MAX_LEN))) {
+			return 0;
+		}
 	} else {
 		if (!strncmp(name, MIPI_CMD_NOVATEK_QHD_PANEL_NAME,
-			strnlen(MIPI_CMD_NOVATEK_QHD_PANEL_NAME,
+				strnlen(MIPI_CMD_NOVATEK_QHD_PANEL_NAME,
 				PANEL_NAME_MAX_LEN)))
 			return 0;
 	}
@@ -148,10 +163,15 @@ static void pm8917_gpio_set_backlight(int bl_level)
  * appropriate function.
  */
 #define DISP_RST_GPIO 58
+#define DSI_LVDS_PWR_GPIO 7
+#define BACKLIGHT_PWR 8
+#define BACKLIGHT_EN 9
+#define PANEL_LR 22
+#define PANEL_UD 25
 #define DISP_3D_2D_MODE 1
 static int mipi_dsi_cdp_panel_power(int on)
 {
-	static struct regulator *reg_l8, *reg_l23, *reg_l2;
+	static struct regulator *reg_l8, *reg_l23, *reg_l2, *reg_l12;
 	/* Control backlight GPIO (24) directly when using PM8917 */
 	int gpio24 = PM8917_GPIO_PM_TO_SYS(24);
 	int rc;
@@ -181,6 +201,15 @@ static int mipi_dsi_cdp_panel_power(int on)
 				PTR_ERR(reg_l2));
 			return -ENODEV;
 		}
+		if (machine_is_msm8x30_type1() || machine_is_msm8x30_type2()) {
+			reg_l12 = regulator_get(&msm_mipi_dsi1_device.dev,
+					"dsi_lvds_vddc");
+			if (IS_ERR(reg_l12)) {
+				pr_err("could not get 8038_l2, rc = %ld\n",
+						PTR_ERR(reg_l2));
+				return -ENODEV;
+			}
+		}
 		rc = regulator_set_voltage(reg_l8, 2800000, 3000000);
 		if (rc) {
 			pr_err("set_voltage l8 failed, rc=%d\n", rc);
@@ -196,6 +225,13 @@ static int mipi_dsi_cdp_panel_power(int on)
 			pr_err("set_voltage l2 failed, rc=%d\n", rc);
 			return -EINVAL;
 		}
+		if (machine_is_msm8x30_type1() || machine_is_msm8x30_type2()) {
+			rc = regulator_set_voltage(reg_l12, 1200000, 1200000);
+			if (rc) {
+				pr_err("set_voltage l2 failed, rc=%d\n", rc);
+				return -EINVAL;
+			}
+		}
 		rc = gpio_request(DISP_RST_GPIO, "disp_rst_n");
 		if (rc) {
 			pr_err("request gpio DISP_RST_GPIO failed, rc=%d\n",
@@ -210,23 +246,40 @@ static int mipi_dsi_cdp_panel_power(int on)
 						DISP_RST_GPIO, rc);
 				return -ENODEV;
 			}
+
+		}
+		if (machine_is_msm8x30_type1() || machine_is_msm8x30_type2()) {
+			rc = gpio_direction_output(DISP_RST_GPIO, 0);
+			if (rc) {
+				pr_err("gpio_direction_output failed for %d gpio rc=%d\n",
+						DISP_RST_GPIO, rc);
+				return -ENODEV;
+			}
+			rc = gpio_request(DSI_LVDS_PWR_GPIO, "dsi_lvds_pwr");
+			if (rc) {
+				pr_err("request gpio (DSI_LVDS_PWR_GPIO failed, rc=%d\n",
+						rc);
+				gpio_free(DSI_LVDS_PWR_GPIO);
+				return -ENODEV;
+			}
 		}
 
 		if (!machine_is_msm8930_evt()) {
 			rc = gpio_request(DISP_3D_2D_MODE, "disp_3d_2d");
 			if (rc) {
 				pr_err("request gpio DISP_3D_2D_MODE failed, rc=%d\n",
-				 rc);
+						rc);
 				gpio_free(DISP_3D_2D_MODE);
 				return -ENODEV;
 			}
-			rc = gpio_direction_output(DISP_3D_2D_MODE, 0);
-			if (rc) {
-				pr_err("gpio_direction_output failed for %d gpio rc=%d\n",
-						DISP_3D_2D_MODE, rc);
-				return -ENODEV;
-			}
 		}
+		rc = gpio_direction_output(DISP_3D_2D_MODE, 0);
+		if (rc) {
+			pr_err("gpio_direction_output failed for %d gpio rc=%d\n",
+					DISP_3D_2D_MODE, rc);
+			return -ENODEV;
+		}
+
 		if (socinfo_get_pmic_model() == PMIC_MODEL_PM8917) {
 			rc = gpio_request(gpio24, "disp_bl");
 			if (rc) {
@@ -238,6 +291,38 @@ static int mipi_dsi_cdp_panel_power(int on)
 			novatek_pdata.gpio_set_backlight =
 				pm8917_gpio_set_backlight;
 		}
+		if (machine_is_msm8x30_type1() || machine_is_msm8x30_type2()) {
+			rc = gpio_request(BACKLIGHT_PWR, "backlight_pwr");
+			if (rc) {
+				pr_err("%s.failed to get backlight_pwr=%d.\n",
+						__func__, BACKLIGHT_PWR);
+				return -1;
+			}
+			gpio_direction_output(BACKLIGHT_PWR, 0);
+		}
+		if (machine_is_msm8x30_type1()) {
+			rc = gpio_request(PANEL_LR, "panel_L/R");
+			if (rc) {
+				pr_err("%s.failed to get panel_L/R=%d.\n",
+						__func__, PANEL_LR);
+				return -1;
+			}
+			gpio_direction_output(PANEL_LR, 0);
+			rc = gpio_request(PANEL_UD, "panel_U/D");
+			if (rc) {
+				pr_err("%s.failed to get panel_U/D=%d.\n",
+						__func__, PANEL_UD);
+				return -1;
+			}
+			gpio_direction_output(PANEL_UD, 0);
+		}
+		rc = gpio_request(BACKLIGHT_EN, "backlight_en");
+		if (rc) {
+			pr_err("%s.failed to get backlight_en=%d.\n",
+			       __func__, BACKLIGHT_EN);
+			return -1;
+		}
+		gpio_direction_output(BACKLIGHT_EN, 0);
 		dsi_power_on = true;
 	}
 
@@ -257,6 +342,13 @@ static int mipi_dsi_cdp_panel_power(int on)
 			pr_err("set_optimum_mode l2 failed, rc=%d\n", rc);
 			return -EINVAL;
 		}
+		if (machine_is_msm8x30_type1() || machine_is_msm8x30_type2()) {
+			rc = regulator_set_optimum_mode(reg_l12, 100000);
+			if (rc < 0) {
+				pr_err("set_optimum_mode l2 failed, rc=%d\n", rc);
+				return -EINVAL;
+			}
+		}
 		rc = regulator_enable(reg_l8);
 		if (rc) {
 			pr_err("enable l8 failed, rc=%d\n", rc);
@@ -272,7 +364,25 @@ static int mipi_dsi_cdp_panel_power(int on)
 			pr_err("enable l2 failed, rc=%d\n", rc);
 			return -ENODEV;
 		}
+		if (machine_is_msm8x30_type1() || machine_is_msm8x30_type2()) {
+			rc = regulator_enable(reg_l12);
+			if (rc) {
+				pr_err("enable l2 failed, rc=%d\n", rc);
+				return -ENODEV;
+			}
+			gpio_direction_output(BACKLIGHT_PWR, 1);
+			usleep(20);
+			gpio_direction_output(BACKLIGHT_EN, 1);
+		}
 		usleep(10000);
+		if (machine_is_msm8x30_type1()) {
+			gpio_direction_output(PANEL_LR, 1);
+			usleep(20);
+			gpio_direction_output(PANEL_UD, 0);
+			usleep(20);
+		}
+		gpio_set_value(DSI_LVDS_PWR_GPIO, 1);
+		usleep(10);
 		gpio_set_value(DISP_RST_GPIO, 1);
 		usleep(10);
 		gpio_set_value(DISP_RST_GPIO, 0);
@@ -282,9 +392,24 @@ static int mipi_dsi_cdp_panel_power(int on)
 			gpio_set_value(DISP_3D_2D_MODE, 1);
 		usleep(20);
 	} else {
-
+		if (machine_is_msm8x30_type1() || machine_is_msm8x30_type2()) {
+			gpio_direction_output(BACKLIGHT_PWR, 0);
+			gpio_direction_output(BACKLIGHT_EN, 0);
+		}
+		if (machine_is_msm8x30_type1()) {
+			gpio_direction_output(PANEL_LR, 0);
+			gpio_direction_output(PANEL_UD, 0);
+		}
+		gpio_set_value(DSI_LVDS_PWR_GPIO, 0);
 		gpio_set_value(DISP_RST_GPIO, 0);
 
+		if (machine_is_msm8x30_type1() || machine_is_msm8x30_type2()) {
+			rc = regulator_disable(reg_l12);
+			if (rc) {
+				pr_err("disable reg_l2 failed, rc=%d\n", rc);
+				return -ENODEV;
+			}
+		}
 		rc = regulator_disable(reg_l2);
 		if (rc) {
 			pr_err("disable reg_l2 failed, rc=%d\n", rc);
@@ -317,6 +442,14 @@ static int mipi_dsi_cdp_panel_power(int on)
 		}
 		if (!machine_is_msm8930_evt())
 			gpio_set_value(DISP_3D_2D_MODE, 0);
+		if (machine_is_msm8x30_type1() || machine_is_msm8x30_type2()) {
+			rc = regulator_set_optimum_mode(reg_l12, 100);
+			if (rc < 0) {
+				pr_err("set_optimum_mode l2 failed, rc=%d\n", rc);
+				return -EINVAL;
+			}
+		}
+		gpio_set_value(DISP_3D_2D_MODE, 0);
 		usleep(20);
 	}
 	return 0;
@@ -490,19 +623,19 @@ void __init msm8930_mdp_writeback(struct memtype_reserve* reserve_table)
 #endif
 }
 
-#define LPM_CHANNEL0 0
-static int toshiba_gpio[] = {LPM_CHANNEL0};
-
-static struct mipi_dsi_panel_platform_data toshiba_pdata = {
-	.gpio = toshiba_gpio,
+#define LPM_CHANNEL_TYPE1 1
+static int dsi2lvds_gpio_type1[2] = {
+	LPM_CHANNEL_TYPE1,/* Backlight PWM-ID=0 for PMIC-GPIO#24 */
+	0x1F08 /* DSI2LVDS Bridge GPIO Output, mask=0x1f, out=0x08 */
+};
+static struct msm_panel_common_pdata mipi_dsi2lvds_pdata_type1 = {
+	.gpio_num = dsi2lvds_gpio_type1,
 };
 
-static struct platform_device mipi_dsi_toshiba_panel_device = {
-	.name = "mipi_toshiba",
+static struct platform_device mipi_dsi2lvds_bridge_device_type1 = {
+	.name = "mipi_tc358764",
 	.id = 0,
-	.dev = {
-		.platform_data = &toshiba_pdata,
-	}
+	.dev.platform_data = &mipi_dsi2lvds_pdata_type1,
 };
 
 static struct platform_device mipi_dsi_NT35590_panel_device = {
@@ -511,38 +644,22 @@ static struct platform_device mipi_dsi_NT35590_panel_device = {
 	/* todo: add any platform data */
 };
 
-#define FPGA_3D_GPIO_CONFIG_ADDR	0xB5
-
-static struct mipi_dsi_phy_ctrl dsi_novatek_cmd_mode_phy_db = {
-
-/* DSI_BIT_CLK at 500MHz, 2 lane, RGB888 */
-	{0x09, 0x08, 0x05, 0x00, 0x20},	/* regulator */
-	/* timing   */
-	{0xab, 0x8a, 0x18, 0x00, 0x92, 0x97, 0x1b, 0x8c,
-	0x0c, 0x03, 0x04, 0xa0},
-	{0x5f, 0x00, 0x00, 0x10},	/* phy ctrl */
-	{0xff, 0x00, 0x06, 0x00},	/* strength */
-	/* pll control */
-	{0x0, 0xe, 0x30, 0xda, 0x00, 0x10, 0x0f, 0x61,
-	0x40, 0x07, 0x03,
-	0x00, 0x1a, 0x00, 0x00, 0x02, 0x0e, 0x01, 0x00, 0x02},
+#define LPM_CHANNEL_TYPE2 0
+static int dsi2lvds_gpio_type2[2] = {
+	LPM_CHANNEL_TYPE2,/* Backlight PWM-ID=0 for PMIC-GPIO#24 */
+	0x1F08 /* DSI2LVDS Bridge GPIO Output, mask=0x1f, out=0x08 */
+};
+static struct msm_panel_common_pdata mipi_dsi2lvds_pdata_type2 = {
+	.gpio_num = dsi2lvds_gpio_type2,
 };
 
-static struct mipi_dsi_panel_platform_data novatek_pdata = {
-	.fpga_3d_config_addr  = FPGA_3D_GPIO_CONFIG_ADDR,
-	.fpga_ctrl_mode = FPGA_SPI_INTF,
-	.phy_ctrl_settings = &dsi_novatek_cmd_mode_phy_db,
-	.dlane_swap = 0x1,
-	.enable_wled_bl_ctrl = 0x1,
-};
-
-static struct platform_device mipi_dsi_novatek_panel_device = {
-	.name = "mipi_novatek",
+static struct platform_device mipi_dsi2lvds_bridge_device_type2 = {
+	.name = "mipi_tc358764",
 	.id = 0,
-	.dev = {
-		.platform_data = &novatek_pdata,
-	}
+	.dev.platform_data = &mipi_dsi2lvds_pdata_type2,
 };
+
+#define FPGA_3D_GPIO_CONFIG_ADDR	0xB5
 
 #ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL
 static struct resource hdmi_msm_resources[] = {
@@ -859,13 +976,15 @@ void __init msm8930_init_fb(void)
 	platform_device_register(&wfd_device);
 #endif
 
-	platform_device_register(&mipi_dsi_novatek_panel_device);
-
 #ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL
 	platform_device_register(&hdmi_msm_device);
 #endif
 
-	platform_device_register(&mipi_dsi_toshiba_panel_device);
+	if (machine_is_msm8x30_type1()) {
+		platform_device_register(&mipi_dsi2lvds_bridge_device_type1);
+	} else if (machine_is_msm8x30_type2()) {
+		platform_device_register(&mipi_dsi2lvds_bridge_device_type2);
+	}
 
 	msm_fb_register_device("mdp", &mdp_pdata);
 	msm_fb_register_device("mipi_dsi", &mipi_dsi_pdata);
