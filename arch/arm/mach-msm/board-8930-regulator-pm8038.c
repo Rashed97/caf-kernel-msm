@@ -73,10 +73,12 @@ VREG_CONSUMERS(L9) = {
 	REGULATOR_SUPPLY("cam_vana",		"4-006c"),
 	REGULATOR_SUPPLY("cam_vana",		"4-0048"),
 	REGULATOR_SUPPLY("cam_vana",		"4-0036"),
+	REGULATOR_SUPPLY("cam_vana",		"4-0021"),
 	REGULATOR_SUPPLY("cam_vaf",		"4-001a"),
 	REGULATOR_SUPPLY("cam_vaf",		"4-006c"),
 	REGULATOR_SUPPLY("cam_vaf",		"4-0048"),
 	REGULATOR_SUPPLY("cam_vaf",		"4-0036"),
+	REGULATOR_SUPPLY("cam_vaf",		"4-0021"),
 	REGULATOR_SUPPLY("cam_vana",            "4-0020"),
 	REGULATOR_SUPPLY("cam_vaf",             "4-0020"),
 /* Regulators for 8930 QRD SGLTE EVT */
@@ -122,6 +124,7 @@ VREG_CONSUMERS(L11) = {
 	REGULATOR_SUPPLY("i2c_src",             "12-000c"),
 	REGULATOR_SUPPLY("i2c_src",             "12-001c"),
 	REGULATOR_SUPPLY("cam_vdig",            "4-0036"),
+	REGULATOR_SUPPLY("cam_vdig",            "4-0021"),
 };
 VREG_CONSUMERS(L12) = {
 	REGULATOR_SUPPLY("8038_l12",		NULL),
@@ -248,6 +251,7 @@ VREG_CONSUMERS(LVS1) = {
 	REGULATOR_SUPPLY("hscd_i2c",		"12-000c"),
 	REGULATOR_SUPPLY("als_i2c",		    "12-001c"),
 	REGULATOR_SUPPLY("cam_vio",             "4-0036"),
+	REGULATOR_SUPPLY("cam_vio",             "4-0021"),
 };
 VREG_CONSUMERS(LVS2) = {
 	REGULATOR_SUPPLY("8038_lvs2",		NULL),

@@ -49,6 +49,13 @@ config OV5647
 	---help---
 	  OV 5M Bayer Sensor with AutoFocus
 
+config GC0339
+	bool "Sensor gc0339 (BAYER 0.3M)"
+	depends on MSM_CAMERA
+	default y
+	---help---
+	  GC0339 Bayer Sensor
+
 config AD5046_ACT
 	bool "Lens actuator ad5046"
 	depends on MSM_CAMERA && OV5647
