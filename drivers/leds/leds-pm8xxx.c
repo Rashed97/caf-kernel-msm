@@ -426,15 +426,18 @@ static int pm8xxx_led_pwm_work(struct pm8xxx_led_singular_data *led)
 		duty_us = (led->pwm_period_us * led->cdev.brightness) /
 								LED_FULL;
 		if (led->cdev.brightness) {
+			led_rgb_set(led, 1);
 			rc = pwm_enable(led->pwm_dev);
 			rc = pwm_config(led->pwm_dev, duty_us, led->pwm_period_us);
 		} else {
 			rc = pwm_config(led->pwm_dev, 0, led->pwm_period_us);
 			pwm_disable(led->pwm_dev);
+			led_rgb_set(led, 0);
 		}
 	} else {
 		pwm_disable(led->pwm_dev);
 		if (led->cdev.brightness) {
+			led_rgb_set(led, 1);
 			for (i = 0; i < led->pwm_duty_cycles->num_duty_pcts; i++) {
 				led->duty_pcts[i] = led->pwm_duty_cycles->duty_pcts[i] * led->cdev.brightness / LED_FULL;
 			}
