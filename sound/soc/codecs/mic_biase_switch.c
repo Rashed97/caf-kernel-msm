@@ -15,7 +15,9 @@
 #include <linux/regulator/consumer.h>
 #include <linux/input/mic_biase_switch.h>
 
+struct regulator *regulator_l17;
 struct mic_biase_switch_platform_data *mic_data;
+int enable_state;
 void mic_biase_switch_set_enable(int enable)
 {
     static int switch_enable = MIC_BIASE_SWITCH_L;
@@ -24,11 +26,24 @@ void mic_biase_switch_set_enable(int enable)
     else
         switch_enable = enable;
     gpio_set_value(mic_data->gpio_switch, switch_enable);
+    enable_state = switch_enable;
 }
 
+int mic_biase_switch_suspend(struct platform_device *pdev, pm_message_t state)
+{
+    regulator_disable(regulator_l17);
+    msleep(10);
+    return 0;
+}
+int mic_biase_switch_resume(struct platform_device *pdev)
+{
+    regulator_enable(regulator_l17);
+    msleep(10);
+    gpio_set_value(mic_data->gpio_switch, enable_state);
+    return 0;
+}
 static int __devinit mic_biase_switch_probe(struct platform_device *pdev)
 {
-    static struct regulator *regulator_l17;
     mic_data = kzalloc(sizeof(struct mic_biase_switch_platform_data), GFP_KERNEL);
 
     regulator_l17= regulator_get(NULL, "8038_l17");
@@ -55,6 +70,8 @@ static int __devexit mic_biase_switch_remove(struct platform_device *pdev)
 static struct platform_driver mic_biase_switch_driver = {
     .driver.name    = "mic_biase_switch",
     .driver.owner   = THIS_MODULE,
+    .suspend        = mic_biase_switch_suspend,
+    .resume         = mic_biase_switch_resume,
     .probe          = mic_biase_switch_probe,
     .remove         = __devexit_p(mic_biase_switch_remove),
 };
