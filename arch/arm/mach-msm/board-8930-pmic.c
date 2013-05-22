@@ -19,7 +19,6 @@
 #include <mach/msm_bus_board.h>
 #include <mach/restart.h>
 #include <mach/socinfo.h>
-#include <linux/module.h>
 #include "devices.h"
 #include "board-8930.h"
 
@@ -161,7 +160,7 @@ static struct pm8xxx_gpio_init pm8038_gpios_type1[] __initdata = {
 };
 
 /* Initial PM8038 TYPE2 GPIO configurations */
-struct pm8xxx_gpio_init pm8038_gpios_type2[] = {
+static struct pm8xxx_gpio_init pm8038_gpios_type2[] __initdata = {
 	/* keys GPIOs */
 	PM8038_GPIO_INPUT(3, PM_GPIO_PULL_UP_30),
 	PM8038_GPIO_INPUT(8, PM_GPIO_PULL_UP_30),
@@ -173,27 +172,6 @@ struct pm8xxx_gpio_init pm8038_gpios_type2[] = {
 	PM8038_GPIO_OUTPUT_VIN(5, 1, PM8038_GPIO_VIN_VPH),
 	/* LCM backlight PWM */
 	PM8038_GPIO_OUTPUT_FUNC(1, 0, PM_GPIO_FUNC_1),
-};
-
-/* Initial PM8038 TYPE1 GPIO configurations */
-static struct pm8xxx_gpio_init pm8038_sleep_gpios_type1[]  = {
-	PM8038_GPIO_INPUT(10, PM_GPIO_PULL_DN),
-	/* haptics gpio */
-	PM8038_GPIO_INPUT(7, PM_GPIO_PULL_DN),
-	/* MHL PWR EN */
-	PM8038_GPIO_INPUT(5, PM_GPIO_PULL_DN),
-	/* LCM backlight PWM */
-	PM8038_GPIO_INPUT(2, PM_GPIO_PULL_DN),
-};
-
-static struct pm8xxx_gpio_init pm8038_sleep_gpios_type2[] = {
-	PM8038_GPIO_INPUT(10, PM_GPIO_PULL_DN),
-	/* haptics gpio */
-	PM8038_GPIO_INPUT(7, PM_GPIO_PULL_DN),
-	/* MHL PWR EN */
-	PM8038_GPIO_INPUT(5, PM_GPIO_PULL_DN),
-	/* LCM backlight PWM */
-	PM8038_GPIO_INPUT(1, PM_GPIO_PULL_DN),
 };
 
 /* Initial PM8038 MPP configurations */
@@ -223,7 +201,7 @@ static struct pm8xxx_mpp_init pm8917_mpps[] __initdata = {
 	PM8917_MPP_INIT(1, D_INPUT, PM8921_MPP_DIG_LEVEL_S4, DIN_TO_INT),
 };
 
-void  msm8930_pm8038_gpio_mpp_init(void)
+void __init msm8930_pm8038_gpio_mpp_init(void)
 {
 	int i, rc;
 
@@ -254,32 +232,6 @@ void  msm8930_pm8038_gpio_mpp_init(void)
 		if (rc) {
 			pr_err("%s: pm8xxx_mpp_config: rc=%d\n", __func__, rc);
 			break;
-		}
-	}
-}
-
-
-void msm8930_pm8038_sleep_gpio_mpp_power_save(void)
-{
-	int i, rc;
-
-	if (machine_is_msm8x30_type1()) {
-		for (i = 0; i < ARRAY_SIZE(pm8038_sleep_gpios_type1); i++) {
-			rc = pm8xxx_gpio_config(pm8038_sleep_gpios_type1[i].gpio,
-					&pm8038_sleep_gpios_type1[i].config);
-			if (rc) {
-				pr_err("%s: pm8xxx_gpio_config: rc=%d\n", __func__, rc);
-				break;
-			}
-		}
-	} else if (machine_is_msm8x30_type2()) {
-		for (i = 0; i < ARRAY_SIZE(pm8038_sleep_gpios_type2); i++) {
-			rc = pm8xxx_gpio_config(pm8038_sleep_gpios_type2[i].gpio,
-					&pm8038_sleep_gpios_type2[i].config);
-			if (rc) {
-				pr_err("%s: pm8xxx_gpio_config: rc=%d\n", __func__, rc);
-				break;
-			}
 		}
 	}
 }
@@ -675,6 +627,3 @@ void __init msm8930_init_pmic(void)
 	if (!machine_is_msm8930_mtp())
 		pm8921_chg_pdata.battery_less_hardware = 1;
 }
-
-EXPORT_SYMBOL(msm8930_pm8038_gpio_mpp_init);
-EXPORT_SYMBOL(msm8930_pm8038_sleep_gpio_mpp_power_save);
