@@ -330,7 +330,6 @@ static int mipi_dsi_cdp_panel_power(int on)
 	}
 
 	if (on) {
-		msm8930_pm8038_gpio_mpp_init();
 		rc = regulator_set_optimum_mode(reg_l8, 100000);
 		if (rc < 0) {
 			pr_err("set_optimum_mode l8 failed, rc=%d\n", rc);
@@ -455,7 +454,6 @@ static int mipi_dsi_cdp_panel_power(int on)
 		}
 		gpio_set_value(DISP_3D_2D_MODE, 0);
 		usleep(20);
-		msm8930_pm8038_sleep_gpio_mpp_power_save();
 	}
 	return 0;
 }
