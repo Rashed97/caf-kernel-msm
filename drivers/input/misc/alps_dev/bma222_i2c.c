@@ -20,9 +20,11 @@
 #include <linux/i2c.h>
 #include <linux/delay.h>
 #include <linux/slab.h>
+#include <linux/err.h>
 #ifdef CONFIG_HAS_EARLYSUSPEND
 #include <linux/earlysuspend.h>
 #endif
+#include <linux/regulator/consumer.h>
 
 #define I2C_RETRY_DELAY    5
 #define I2C_RETRIES        5
@@ -57,6 +59,78 @@ static struct early_suspend accsns_early_suspend_handler;
 
 static atomic_t flgEna;
 static atomic_t flgSuspend;
+
+struct sensor_regulator {
+    struct regulator *vreg;
+    const char *name;
+    u32 min_uV;
+    u32 max_uV;
+};
+
+struct sensor_regulator accsns_vreg[] = {
+    {NULL, "acc_vdd", 2850000, 2850000},
+    {NULL, "i2c_src", 1800000, 1800000},
+    {NULL, "vcc_i2c", 0, 0},
+    {NULL, "acc_i2c", 0, 0},
+};
+
+static int accsns_config_regulator(struct i2c_client *client, bool on)
+{
+    int rc = 0, i;
+    int num_reg = sizeof(accsns_vreg) / sizeof(struct sensor_regulator);
+
+    if (on) {
+        for (i = 0; i < num_reg; i++) {
+            accsns_vreg[i].vreg = regulator_get(&client->dev,
+                    accsns_vreg[i].name);
+            if (IS_ERR(accsns_vreg[i].vreg)) {
+                rc = PTR_ERR(accsns_vreg[i].vreg);
+                pr_err("%s:regulator get failed rc=%d\n",
+                        __func__, rc);
+                goto error_vdd;
+            }
+
+            if (regulator_count_voltages(accsns_vreg[i].vreg) > 0) {
+                rc = regulator_set_voltage(accsns_vreg[i].vreg,
+                        accsns_vreg[i].min_uV, accsns_vreg[i].max_uV);
+                if (rc) {
+                    pr_err("%s:set_voltage failed rc=%d\n",
+                        __func__, rc);
+                    regulator_put(accsns_vreg[i].vreg);
+                    goto error_vdd;
+                }
+            }
+
+            rc = regulator_enable(accsns_vreg[i].vreg);
+            if (rc) {
+                pr_err("%s: regulator_enable failed rc =%d\n",
+                        __func__,
+                        rc);
+
+                if (regulator_count_voltages(
+                    accsns_vreg[i].vreg) > 0) {
+                    regulator_set_voltage(accsns_vreg[i].vreg,
+                            0, accsns_vreg[i].max_uV);
+                }
+                regulator_put(accsns_vreg[i].vreg);
+                goto error_vdd;
+            }
+        }
+        return rc;
+    } else {
+        i = num_reg;
+    }
+error_vdd:
+    while (--i >= 0) {
+        if (regulator_count_voltages(accsns_vreg[i].vreg) > 0) {
+            regulator_set_voltage(accsns_vreg[i].vreg, 0,
+                    accsns_vreg[i].max_uV);
+        }
+        regulator_disable(accsns_vreg[i].vreg);
+        regulator_put(accsns_vreg[i].vreg);
+    }
+    return rc;
+}
 
 static int accsns_i2c_readm(u8 *rxData, int length)
 {
@@ -158,6 +232,9 @@ void accsns_activate(int flgatm, int flg)
 
     if (flg != 0) flg = 1;
 
+	if (!atomic_read(&flgEna))
+		accsns_config_regulator(client_accsns, true);
+
     buf[0] = ACC_REG0F    ; buf[1] = 0x03;    /*  g-range +/-2g   */
     accsns_i2c_writem(buf, 2);
     buf[0] = ACC_REG10    ; buf[1] = 0x0D;    /*  Bandwidth 250Hz */
@@ -168,6 +245,9 @@ void accsns_activate(int flgatm, int flg)
     accsns_i2c_writem(buf, 2);
     mdelay(2);
     if (flgatm) atomic_set(&flgEna, flg);
+
+	if (!atomic_read(&flgEna))
+		accsns_config_regulator(client_accsns, false);
 }
 
 static void accsns_register_init(void)

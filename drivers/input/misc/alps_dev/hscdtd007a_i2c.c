@@ -20,9 +20,11 @@
 #include <linux/i2c.h>
 #include <linux/delay.h>
 #include <linux/slab.h>
+#include <linux/err.h>
 #ifdef CONFIG_HAS_EARLYSUSPEND
 #include <linux/earlysuspend.h>
 #endif
+#include <linux/regulator/consumer.h>
 
 /* If i2c_board_info structure of HSCDTD sensor already registered, 
   please enable the "RESISTER_HSCDTD_I2C".  */
@@ -68,6 +70,78 @@ static struct early_suspend hscd_early_suspend_handler;
 static atomic_t flgEna;
 static atomic_t delay;
 static atomic_t flgSuspend;
+
+struct sensor_regulator {
+    struct regulator *vreg;
+    const char *name;
+    u32 min_uV;
+    u32 max_uV;
+};
+
+struct sensor_regulator hscd_vreg[] = {
+    {NULL, "hscd_vdd", 2850000, 2850000},
+    {NULL, "i2c_src", 1800000, 1800000},
+    {NULL, "vcc_i2c", 0, 0},
+    {NULL, "hscd_i2c", 0, 0},
+};
+
+static int hscd_config_regulator(struct i2c_client *client, bool on)
+{
+    int rc = 0, i;
+    int num_reg = sizeof(hscd_vreg) / sizeof(struct sensor_regulator);
+
+    if (on) {
+        for (i = 0; i < num_reg; i++) {
+            hscd_vreg[i].vreg = regulator_get(&client->dev,
+                    hscd_vreg[i].name);
+            if (IS_ERR(hscd_vreg[i].vreg)) {
+                rc = PTR_ERR(hscd_vreg[i].vreg);
+                pr_err("%s:regulator get failed rc=%d\n",
+                        __func__, rc);
+                goto error_vdd;
+            }
+
+            if (regulator_count_voltages(hscd_vreg[i].vreg) > 0) {
+                rc = regulator_set_voltage(hscd_vreg[i].vreg,
+                        hscd_vreg[i].min_uV, hscd_vreg[i].max_uV);
+                if (rc) {
+                    pr_err("%s:set_voltage failed rc=%d\n",
+                        __func__, rc);
+                    regulator_put(hscd_vreg[i].vreg);
+                    goto error_vdd;
+                }
+            }
+
+            rc = regulator_enable(hscd_vreg[i].vreg);
+            if (rc) {
+                pr_err("%s: regulator_enable failed rc =%d\n",
+                        __func__,
+                        rc);
+
+                if (regulator_count_voltages(
+                    hscd_vreg[i].vreg) > 0) {
+                    regulator_set_voltage(hscd_vreg[i].vreg,
+                            0, hscd_vreg[i].max_uV);
+                }
+                regulator_put(hscd_vreg[i].vreg);
+                goto error_vdd;
+            }
+        }
+        return rc;
+    } else {
+        i = num_reg;
+    }
+error_vdd:
+    while (--i >= 0) {
+        if (regulator_count_voltages(hscd_vreg[i].vreg) > 0) {
+            regulator_set_voltage(hscd_vreg[i].vreg, 0,
+                    hscd_vreg[i].max_uV);
+        }
+        regulator_disable(hscd_vreg[i].vreg);
+        regulator_put(hscd_vreg[i].vreg);
+    }
+    return rc;
+}
 
 int hscd_get_hardware_data(int *xyz);
 
@@ -266,6 +340,9 @@ void hscd_activate(int flgatm, int flg, int dtime)
 
     if (flg != 0) flg = 1;
 
+	if (!atomic_read(&flgEna))
+		hscd_config_regulator(client_hscd, true);
+
     if (flg) {
         buf[0] = HSCD_CTRL4;                       // 15 bit signed value
         buf[1] = 0x90;
@@ -285,6 +362,9 @@ void hscd_activate(int flgatm, int flg, int dtime)
         atomic_set(&flgEna, flg);
         atomic_set(&delay, dtime);
     }
+
+	if (!atomic_read(&flgEna))
+		hscd_config_regulator(client_hscd, false);
 }
 
 static int hscd_register_init(void)
