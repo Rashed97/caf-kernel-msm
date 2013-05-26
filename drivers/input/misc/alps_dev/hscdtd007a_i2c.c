@@ -338,10 +338,10 @@ void hscd_activate(int flgatm, int flg, int dtime)
 {
     u8 buf[2];
 
-    if (flg != 0) flg = 1;
+    if (atomic_read(&flgSuspend))
+        return;
 
-	if (!atomic_read(&flgEna))
-		hscd_config_regulator(client_hscd, true);
+    if (flg != 0) flg = 1;
 
     if (flg) {
         buf[0] = HSCD_CTRL4;                       // 15 bit signed value
@@ -362,9 +362,6 @@ void hscd_activate(int flgatm, int flg, int dtime)
         atomic_set(&flgEna, flg);
         atomic_set(&delay, dtime);
     }
-
-	if (!atomic_read(&flgEna))
-		hscd_config_regulator(client_hscd, false);
 }
 
 static int hscd_register_init(void)
@@ -459,8 +456,15 @@ static int hscd_suspend(struct i2c_client *client, pm_message_t mesg)
 #ifdef ALPS_DEBUG
     printk("[HSCD] suspend\n");
 #endif
-    atomic_set(&flgSuspend, 1);
+    if (atomic_read(&flgSuspend))
+        return 0;
+
     hscd_activate(0, 0, atomic_read(&delay));
+
+    if (!atomic_read(&flgSuspend))
+        hscd_config_regulator(client_hscd, false);
+
+    atomic_set(&flgSuspend, 1);
     return 0;
 }
 
@@ -469,8 +473,15 @@ static int hscd_resume(struct i2c_client *client)
 #ifdef ALPS_DEBUG
     printk("[HSCD] resume\n");
 #endif
-    atomic_set(&flgSuspend, 0);
+    if (!atomic_read(&flgSuspend))
+        return 0;
+
+    if (atomic_read(&flgSuspend))
+        hscd_config_regulator(client_hscd, true);
+
     hscd_activate(0, atomic_read(&flgEna), atomic_read(&delay));
+
+    atomic_set(&flgSuspend, 0);
     return 0;
 }
 
@@ -570,6 +581,8 @@ static int __init hscd_init(void)
 #ifdef CONFIG_HAS_EARLYSUSPEND
     register_early_suspend(&hscd_early_suspend_handler);
 #endif
+
+    hscd_config_regulator(client_hscd, true);
 
     rc = hscd_register_init();
     if (rc != 0) {
