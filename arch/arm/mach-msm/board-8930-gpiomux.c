@@ -229,21 +229,6 @@ static struct gpiomux_setting cdc_mclk = {
 	.pull = GPIOMUX_PULL_NONE,
 };
 
-static struct gpiomux_setting audio_auxpcm[] = {
-	/* Suspended state */
-	{
-		.func = GPIOMUX_FUNC_GPIO,
-		.drv = GPIOMUX_DRV_2MA,
-		.pull = GPIOMUX_PULL_NONE,
-	},
-	/* Active state */
-	{
-		.func = GPIOMUX_FUNC_1,
-		.drv = GPIOMUX_DRV_2MA,
-		.pull = GPIOMUX_PULL_NONE,
-	},
-};
-
 static struct gpiomux_setting audio_mbhc = {
 	.func = GPIOMUX_FUNC_GPIO,
 	.drv = GPIOMUX_DRV_8MA,
@@ -418,6 +403,13 @@ static struct gpiomux_setting mdp_vsync_active_cfg = {
 	.drv = GPIOMUX_DRV_2MA,
 	.pull = GPIOMUX_PULL_DOWN,
 };
+static struct gpiomux_setting mic_biase_switch_int_line = {
+	.func = GPIOMUX_FUNC_GPIO,
+	.drv = GPIOMUX_DRV_2MA,
+	.pull = GPIOMUX_PULL_NONE,
+};
+
+
 
 #ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL
 static struct gpiomux_setting hdmi_suspend_cfg = {
@@ -606,6 +598,16 @@ static struct msm_gpiomux_config msm8960_gsbi_configs[] __initdata = {
 	},
 };
 
+static struct msm_gpiomux_config mic_biase_switch_config[] __initdata = {
+	{
+		.gpio = 65,     /* Acc Interrupt Line */
+		.settings = {
+			[GPIOMUX_SUSPENDED] = &mic_biase_switch_int_line,
+			[GPIOMUX_ACTIVE] = &mic_biase_switch_int_line,
+		},
+	},
+};
+
 static struct msm_gpiomux_config msm8930_sglte_gsbi_configs[] __initdata = {
 	/* Add the I2C/SPI GPIOs Here */
 	{
@@ -737,37 +739,6 @@ static struct msm_gpiomux_config msm8960_audio_spkr_configs[] __initdata = {
 		.gpio = 15,
 		.settings = {
 			[GPIOMUX_SUSPENDED] = &audio_spkr_boost,
-		},
-	},
-};
-
-static struct msm_gpiomux_config msm8960_audio_auxpcm_configs[] __initdata = {
-	{
-		.gpio = 63,
-		.settings = {
-			[GPIOMUX_SUSPENDED] = &audio_auxpcm[0],
-			[GPIOMUX_ACTIVE] = &audio_auxpcm[1],
-		},
-	},
-	{
-		.gpio = 64,
-		.settings = {
-			[GPIOMUX_SUSPENDED] = &audio_auxpcm[0],
-			[GPIOMUX_ACTIVE] = &audio_auxpcm[1],
-		},
-	},
-	{
-		.gpio = 65,
-		.settings = {
-			[GPIOMUX_SUSPENDED] = &audio_auxpcm[0],
-			[GPIOMUX_ACTIVE] = &audio_auxpcm[1],
-		},
-	},
-	{
-		.gpio = 66,
-		.settings = {
-			[GPIOMUX_SUSPENDED] = &audio_auxpcm[0],
-			[GPIOMUX_ACTIVE] = &audio_auxpcm[1],
 		},
 	},
 };
@@ -1241,8 +1212,8 @@ int __init msm8930_init_gpiomux(void)
 	msm_gpiomux_install(msm8960_audio_spkr_configs,
 			ARRAY_SIZE(msm8960_audio_spkr_configs));
 
-	msm_gpiomux_install(msm8960_audio_auxpcm_configs,
-			ARRAY_SIZE(msm8960_audio_auxpcm_configs));
+	msm_gpiomux_install(mic_biase_switch_config,
+			ARRAY_SIZE(mic_biase_switch_config));
 
 	msm_gpiomux_install(wcnss_5wire_interface,
 			ARRAY_SIZE(wcnss_5wire_interface));

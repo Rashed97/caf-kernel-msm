@@ -871,6 +871,8 @@ static int msm8930_audrx_init(struct snd_soc_pcm_runtime *rtd)
 		return err;
 	}
 
+	mbhc_cfg.gpio = 37;
+    gpio_request(37, "headset_insert");
 	mbhc_cfg.gpio_irq = gpio_to_irq(mbhc_cfg.gpio);
 	sitar_hs_detect(codec, &mbhc_cfg);
 

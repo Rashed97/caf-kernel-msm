@@ -37,6 +37,7 @@
 #include <linux/irq.h>
 #include <linux/wakelock.h>
 #include <linux/suspend.h>
+#include <linux/input/mic_biase_switch.h>
 #include "wcd9304.h"
 
 #define WCD9304_RATES (SNDRV_PCM_RATE_8000|SNDRV_PCM_RATE_16000|\
@@ -4334,6 +4335,8 @@ sitar_codec_decide_gpio_plug(struct snd_soc_codec *codec)
 	bool highdelta;
 	bool ahighv = false, highv, r = false;
 	bool gndmicswapped = false;
+    int mic_mv_total = 0;
+    int mic_mv_arvg = 0;
 
 	struct sitar_mbhc_plug_type_cfg *plug_type_ptr =
 		SITAR_MBHC_CAL_PLUG_TYPE_PTR(sitar->mbhc_cfg.calibration);
@@ -4399,7 +4402,15 @@ sitar_codec_decide_gpio_plug(struct snd_soc_codec *codec)
 		if (ahighv && inval)
 			break;
 		mic_mv[i] = scaled;
+        printk("111111111111111 mic_mv[%d] = %d", i, mic_mv[i]);
+        mic_mv_total += mic_mv[i];
 	}
+
+    mic_mv_arvg = mic_mv_total / MBHC_NUM_DCE_PLUG_DETECT;
+    if(mic_mv_arvg < US_HEADSET_DETECT_VLAUE && mic_mv_arvg > HEADPHONE_DETECT_VALUE) {
+        mic_biase_switch_set_enable(MIC_BIASE_SWITCH_INV);
+    }
+
 	sitar_turn_onoff_override(codec, false);
 
 	if (sitar_hs_gpio_level_remove(sitar)) {
