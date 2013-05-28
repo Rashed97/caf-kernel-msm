@@ -93,6 +93,8 @@ static int hdmi_msm_read_edid(void);
 static void hdmi_msm_hpd_off(void);
 static boolean hdmi_msm_is_dvi_mode(void);
 
+static int hdmi_msm_hpd_feature(int on);
+static int _hdmi_online = TRUE;
 #ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL_CEC_SUPPORT
 
 static void hdmi_msm_cec_line_latch_detect(void);
@@ -4553,6 +4555,32 @@ static bool hdmi_msm_cable_connected(void)
 			external_common_state->hpd_state;
 }
 
+static ssize_t hdmi_msm_online_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	//struct hdmi_msm_panel_data *led = dev_get_drvdata(dev);
+    ssize_t ret = 0;
+    int hdmi_online = 0;
+    hdmi_online = _hdmi_online;
+    ret = sprintf(buf,"%d",hdmi_online);
+        return ret;
+}
+
+static ssize_t hdmi_msm_online_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	//struct hdmi_msm_panel_data *led = dev_get_drvdata(dev);
+    int hdmi_online = 0;
+
+    sscanf(buf, "%d", &hdmi_online);
+    _hdmi_online =  hdmi_online;
+    hdmi_msm_hpd_feature(_hdmi_online);
+    //hdmi_msm_isr(0,NULL);
+    //DEV_ERR("%s: hdmi_online==%d\n",__func__,_hdmi_online);
+	return count;
+}
+
+static DEVICE_ATTR(online, S_IRUGO | S_IWUSR, hdmi_msm_online_show, hdmi_msm_online_store);
 static int __devinit hdmi_msm_probe(struct platform_device *pdev)
 {
 	int rc;
@@ -4603,6 +4631,14 @@ static int __devinit hdmi_msm_probe(struct platform_device *pdev)
 		#undef IO_REMAP
 		#undef GET_IRQ
 		return 0;
+	}
+
+    DEV_ERR("++%s: device_create_file\n",__func__);
+
+    rc = device_create_file(&pdev->dev,&dev_attr_online);
+	if (rc) {
+		dev_err(&pdev->dev, "device_create_file failed: on_ms\n");
+		goto error;
 	}
 
 	hdmi_msm_state->hdmi_app_clk = clk_get(&pdev->dev, "core_clk");
@@ -4780,7 +4816,9 @@ static int __devexit hdmi_msm_remove(struct platform_device *pdev)
 static int hdmi_msm_hpd_feature(int on)
 {
 	int rc = 0;
-
+  
+  if(on != _hdmi_online)
+     on = _hdmi_online;
 	DEV_INFO("%s: %d\n", __func__, on);
 	if (on) {
 		rc = hdmi_msm_hpd_on();
