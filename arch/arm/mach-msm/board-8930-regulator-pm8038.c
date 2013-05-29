@@ -95,6 +95,7 @@ VREG_CONSUMERS(L9) = {
 	REGULATOR_SUPPLY("CDC_VDDA_A_L9_2P85V",	"sitar1p1-slim"),
 	REGULATOR_SUPPLY("acc_vdd",			"12-0018"),
 	REGULATOR_SUPPLY("hscd_vdd",		"12-000c"),
+	REGULATOR_SUPPLY("als_vdd",			"12-001c"),
 };
 VREG_CONSUMERS(L10) = {
 	REGULATOR_SUPPLY("8038_l10",		NULL),
@@ -117,6 +118,7 @@ VREG_CONSUMERS(L11) = {
 	REGULATOR_SUPPLY("mhl_iovcc18",		"0-0039"),
 	REGULATOR_SUPPLY("i2c_src",             "12-0018"),
 	REGULATOR_SUPPLY("i2c_src",             "12-000c"),
+	REGULATOR_SUPPLY("i2c_src",             "12-001c"),
 };
 VREG_CONSUMERS(L12) = {
 	REGULATOR_SUPPLY("8038_l12",		NULL),
@@ -241,6 +243,7 @@ VREG_CONSUMERS(LVS1) = {
 	REGULATOR_SUPPLY("cam_vio",		"8-0010"),
 	REGULATOR_SUPPLY("acc_i2c",		    "12-0018"),
 	REGULATOR_SUPPLY("hscd_i2c",		"12-000c"),
+	REGULATOR_SUPPLY("als_i2c",		    "12-001c"),
 };
 VREG_CONSUMERS(LVS2) = {
 	REGULATOR_SUPPLY("8038_lvs2",		NULL),
@@ -251,6 +254,7 @@ VREG_CONSUMERS(LVS2) = {
 	REGULATOR_SUPPLY("vlogic",		"12-0068"),
 	REGULATOR_SUPPLY("vcc_i2c",		    "12-0018"),
 	REGULATOR_SUPPLY("vcc_i2c",		    "12-000c"),
+	REGULATOR_SUPPLY("vcc_i2c",		    "12-001c"),
 };
 VREG_CONSUMERS(EXT_5V) = {
 	REGULATOR_SUPPLY("ext_5v",		NULL),

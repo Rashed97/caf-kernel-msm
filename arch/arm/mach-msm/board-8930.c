@@ -55,6 +55,10 @@
 #include <linux/input/lis3dh.h>
 #endif
 
+#ifdef CONFIG_AL3010
+#include <linux/input/al3010.h>
+#endif
+
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
 #include <asm/setup.h>
@@ -2993,6 +2997,25 @@ static struct i2c_board_info __initdata bmp18x_i2c_boardinfo[] = {
 };
 #endif
 
+#ifdef CONFIG_AL3010
+
+#define AL3010_LIGHT_DEV_NAME	"al3010"
+#define AL3010_INT_GPIO		49
+
+struct al3010_platform_data al3010_light = {
+	.irq_gpio = AL3010_INT_GPIO,
+};
+
+static struct i2c_board_info __initdata al3010_i2c_boardinfo[] = {
+	{
+		I2C_BOARD_INFO(AL3010_LIGHT_DEV_NAME, 0x1C),
+		.irq = MSM_GPIO_TO_INT(AL3010_INT_GPIO),
+		.platform_data = &al3010_light,
+	},
+};
+
+#endif
+
 static struct i2c_registry msm8960_i2c_devices[] __initdata = {
 #ifdef CONFIG_ISL9519_CHARGER
 	{
@@ -3048,6 +3071,14 @@ static struct i2c_registry msm8960_i2c_devices[] __initdata = {
 		MSM_8930_GSBI12_QUP_I2C_BUS_ID,
 		bmp18x_i2c_boardinfo,
 		ARRAY_SIZE(bmp18x_i2c_boardinfo),
+	},
+#endif
+#ifdef CONFIG_AL3010
+	{
+		I2C_SURF | I2C_FFA | I2C_FLUID | I2C_LIQUID | I2C_RUMI,
+		MSM_8930_GSBI12_QUP_I2C_BUS_ID,
+		al3010_i2c_boardinfo,
+		ARRAY_SIZE(al3010_i2c_boardinfo),
 	},
 #endif
 
