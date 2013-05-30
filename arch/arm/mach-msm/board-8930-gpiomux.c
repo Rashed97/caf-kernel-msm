@@ -18,6 +18,7 @@
 #include "devices.h"
 #include "board-8930.h"
 
+#ifndef CONFIG_CHARGER_SMB347
 /* GSBI10 UART configurations */
 static struct gpiomux_setting gsbi10_uart_cfg = {
 	.func = GPIOMUX_FUNC_2,
@@ -61,7 +62,7 @@ static struct msm_gpiomux_config msm8930_gsbi11_uart_configs[] __initdata = {
 		},
 	},
 };
-
+#endif
 
 /* The SPI configurations apply to GSBI 1*/
 static struct gpiomux_setting spi_active = {
@@ -228,6 +229,14 @@ static struct gpiomux_setting cdc_mclk = {
 	.drv = GPIOMUX_DRV_2MA,
 	.pull = GPIOMUX_PULL_NONE,
 };
+
+#ifdef CONFIG_CHARGER_SMB347
+static struct gpiomux_setting gsbi11 = {
+	.func = GPIOMUX_FUNC_1,
+	.drv = GPIOMUX_DRV_8MA,
+	.pull = GPIOMUX_PULL_UP,
+};
+#endif
 
 static struct gpiomux_setting audio_mbhc = {
 	.func = GPIOMUX_FUNC_GPIO,
@@ -584,6 +593,7 @@ static struct msm_gpiomux_config msm8960_gsbi_configs[] __initdata = {
 			[GPIOMUX_SUSPENDED] = &gsbi12,
 		},
 	},
+#ifndef CONFIG_CHARGER_SMB347
 	{
 		.gpio      = 73,	/* GSBI10 I2C QUP SDA */
 		.settings = {
@@ -596,6 +606,20 @@ static struct msm_gpiomux_config msm8960_gsbi_configs[] __initdata = {
 			[GPIOMUX_SUSPENDED] = &gsbi10,
 		},
 	},
+#else
+        {
+                .gpio      = 40,        /* GSBI11 I2C QUP SDA */
+                .settings = {
+                        [GPIOMUX_SUSPENDED] = &gsbi11,
+                },
+        },
+        {
+                .gpio      = 41,        /* GSBI11 I2C QUP SCL */
+                .settings = {
+                        [GPIOMUX_SUSPENDED] = &gsbi11,
+                },
+        },
+#endif
 };
 
 static struct msm_gpiomux_config mic_biase_switch_config[] __initdata = {
@@ -1127,12 +1151,15 @@ static struct msm_gpiomux_config msm8930_external_vfr_configs[] __initdata = {
 
 int __init sglte8930_init_gpiomux(void)
 {
+#ifndef CONFIG_CHARGER_SMB347
 	int minor_ver = SOCINFO_VERSION_MINOR(socinfo_get_platform_version());
 	int major_ver = SOCINFO_VERSION_MAJOR(socinfo_get_platform_version());
-
+#endif
 	/* For 8960 Fusion 2.2 Primary IPC */
 	msm_gpiomux_install(msm8930_fusion_gsbi_configs,
 			ARRAY_SIZE(msm8930_fusion_gsbi_configs));
+
+#ifndef CONFIG_CHARGER_SMB347
 	/* For 8930 SGLTE Serial Console */
 	if (machine_is_msm8930_evt() && major_ver == 1) {
 		if (minor_ver == 0)
@@ -1142,6 +1169,7 @@ int __init sglte8930_init_gpiomux(void)
 			msm_gpiomux_install(msm8930_gsbi11_uart_configs,
 				ARRAY_SIZE(msm8930_gsbi11_uart_configs));
 	}
+#endif
 
 	/* For SGLTE 8960 Fusion External VFR */
 	msm_gpiomux_install(msm8930_external_vfr_configs,

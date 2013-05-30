@@ -100,6 +100,7 @@ VREG_CONSUMERS(L9) = {
 	REGULATOR_SUPPLY("acc_vdd",			"12-0018"),
 	REGULATOR_SUPPLY("hscd_vdd",		"12-000c"),
 	REGULATOR_SUPPLY("als_vdd",			"12-001c"),
+	REGULATOR_SUPPLY("smb_l9",		"11-0035"),
 };
 VREG_CONSUMERS(L10) = {
 	REGULATOR_SUPPLY("8038_l10",		NULL),
@@ -247,6 +248,7 @@ VREG_CONSUMERS(LVS1) = {
 	REGULATOR_SUPPLY("cam_vio",		"8-0020"),
 	REGULATOR_SUPPLY("cam_vio",		"8-0036"),
 	REGULATOR_SUPPLY("cam_vio",		"8-0010"),
+	REGULATOR_SUPPLY("smb_lvs1",		"11-0035"),
 	REGULATOR_SUPPLY("acc_i2c",		    "12-0018"),
 	REGULATOR_SUPPLY("hscd_i2c",		"12-000c"),
 	REGULATOR_SUPPLY("als_i2c",		    "12-001c"),
@@ -260,6 +262,8 @@ VREG_CONSUMERS(LVS2) = {
 	REGULATOR_SUPPLY("vcc_i2c",		"3-0020"),
 	REGULATOR_SUPPLY("vddio",		"12-0018"),
 	REGULATOR_SUPPLY("vlogic",		"12-0068"),
+	REGULATOR_SUPPLY("smb_lvs2",		"11-0035"),
+	REGULATOR_SUPPLY("bq27541_lvs2",	"11-0055"),
 	REGULATOR_SUPPLY("vcc_i2c",		    "12-0018"),
 	REGULATOR_SUPPLY("vcc_i2c",		    "12-000c"),
 	REGULATOR_SUPPLY("vcc_i2c",		    "12-001c"),

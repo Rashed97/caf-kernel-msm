@@ -22,6 +22,12 @@
 #include <linux/power_supply.h>
 #include <linux/power/smb347-charger.h>
 #include <linux/seq_file.h>
+#include <linux/wakelock.h>
+#include <linux/delay.h>
+
+#ifdef CONFIG_HAS_EARLYSUSPEND
+#include <linux/earlysuspend.h>
+#endif
 
 /*
  * Configuration registers. These are mirrored to volatile RAM and can be
@@ -38,6 +44,8 @@
 #define CFG_CURRENT_LIMIT_DC_MASK		0xf0
 #define CFG_CURRENT_LIMIT_DC_SHIFT		4
 #define CFG_CURRENT_LIMIT_USB_MASK		0x0f
+#define CFG_VARIOUS				0x01
+#define CFG_VARIOUS_VCHG			BIT(0)
 #define CFG_FLOAT_VOLTAGE			0x03
 #define CFG_FLOAT_VOLTAGE_THRESHOLD_MASK	0xc0
 #define CFG_FLOAT_VOLTAGE_THRESHOLD_SHIFT	6
@@ -46,6 +54,8 @@
 #define CFG_STAT_ACTIVE_HIGH			BIT(7)
 #define CFG_PIN					0x06
 #define CFG_PIN_EN_CTRL_MASK			0x60
+#define CFG_PIN_EN_CTRL_USB_HC			0x10
+#define CFG_REG_EN				0x20
 #define CFG_PIN_EN_CTRL_ACTIVE_HIGH		0x40
 #define CFG_PIN_EN_CTRL_ACTIVE_LOW		0x60
 #define CFG_PIN_EN_APSD_IRQ			BIT(1)
@@ -59,6 +69,7 @@
 #define CFG_SYSOK				0x08
 #define CFG_SYSOK_SUSPEND_HARD_LIMIT_DISABLED	BIT(2)
 #define CFG_OTHER				0x09
+#define CFG_OTHER_LOW_BATTERY			BIT(2)
 #define CFG_OTHER_RID_MASK			0xc0
 #define CFG_OTHER_RID_ENABLED_AUTO_OTG		0xc0
 #define CFG_OTG					0x0a
@@ -78,6 +89,7 @@
 #define CFG_FAULT_IRQ				0x0c
 #define CFG_FAULT_IRQ_DCIN_UV			BIT(2)
 #define CFG_STATUS_IRQ				0x0d
+#define CFG_STATUS_IRQ_LOW_BATTERY		BIT(0)
 #define CFG_STATUS_IRQ_TERMINATION_OR_TAPER	BIT(4)
 #define CFG_ADDRESS				0x0e
 
@@ -87,10 +99,14 @@
 #define CMD_A_SUSPEND_ENABLED			BIT(2)
 #define CMD_A_ALLOW_WRITE			BIT(7)
 #define CMD_B					0x31
+#define CMD_B_HC_ENABLE				0x01
 #define CMD_C					0x33
 
 /* Interrupt Status registers */
 #define IRQSTAT_A				0x35
+#define IRQSTAT_B				0x36
+#define IRQSTAT_B_LOW_BATTERY_IRQ		BIT(3)
+#define IRQSTAT_B_LOW_BATTERY_STAT		BIT(2)
 #define IRQSTAT_C				0x37
 #define IRQSTAT_C_TERMINATION_STAT		BIT(0)
 #define IRQSTAT_C_TERMINATION_IRQ		BIT(1)
@@ -112,6 +128,10 @@
 #define STAT_C_CHG_SHIFT			1
 #define STAT_C_CHARGER_ERROR			BIT(6)
 #define STAT_E					0x3f
+
+#define SW_COLD_PROTECT_CURRENT 		700000
+#define SW_HOT_PROTECT_CURRENT			1200000
+#define I2C_RETRY_TIMES				10
 
 /**
  * struct smb347_charger - smb347 charger instance
@@ -135,8 +155,15 @@ struct smb347_charger {
 	bool			mains_online;
 	bool			usb_online;
 	bool			charging_enabled;
+	bool			is_suspend;
+	bool			is_early_suspend;
+	bool			is_temperature_protect;
 	struct dentry		*dentry;
-	const struct smb347_charger_platform_data *pdata;
+	const struct 		smb347_charger_platform_data *pdata;
+	int			charger_type_flags;
+#ifdef CONFIG_HAS_EARLYSUSPEND
+	struct			early_suspend early_suspend;
+#endif
 };
 
 /* Fast charge current in uA */
@@ -193,6 +220,64 @@ static const unsigned int ccc_tbl[] = {
 	1200000,
 };
 
+struct smb347_charger *the_chip;
+static struct wake_lock smb_lock;
+static bool wakelock_smb_count;
+static unsigned int charging_current;
+
+/* USB calls these to tell us how much max usb current the system can draw */
+void smb347_charger_vbus_draw(unsigned int mA)
+{
+	bool charge     = false;
+	const struct smb347_charger_platform_data *pdata = the_chip->pdata;
+	charging_current = mA;
+
+	pr_info("%s Enter charge=%d\n", __FUNCTION__, mA);	
+
+	if (mA == IDEV_CHG_MIN){
+		the_chip->charger_type_flags = POWER_SUPPLY_CHARGER_USB;
+		the_chip->usb_online = 1;
+		power_supply_set_online(&the_chip->usb, the_chip->usb_online);
+		power_supply_changed(&the_chip->usb);
+		wakelock_smb_count = true;
+		wake_lock(&smb_lock);
+	}
+	else if (mA == IDEV_CHG_MAX){
+		the_chip->charger_type_flags = POWER_SUPPLY_CHARGER_AC;
+		the_chip->mains_online = 1;
+		power_supply_set_online(&the_chip->mains, the_chip->mains_online);
+		power_supply_changed(&the_chip->mains);
+		wakelock_smb_count = true;
+		wake_lock(&smb_lock);
+	}
+	else {
+		the_chip->mains_online = 0;
+		the_chip->usb_online = 0;
+		the_chip->charger_type_flags = POWER_SUPPLY_CHARGER_REMOVE;
+                power_supply_set_online(&the_chip->mains, the_chip->mains_online);
+                power_supply_set_online(&the_chip->usb, the_chip->usb_online);
+                power_supply_changed(&the_chip->mains);
+                power_supply_changed(&the_chip->usb);
+		power_supply_changed(&the_chip->battery);
+
+		if ((wakelock_smb_count) && (!mA)) {
+
+		        charge = pm8921_is_usb_chg_plugged_in();
+	               	if (charge == -EINVAL)
+				charge = 0;
+
+			if((the_chip->is_early_suspend) && (!charge) && (!(the_chip->is_suspend))){
+				pdata->enable_power(0);
+				the_chip->is_suspend = true;
+				pr_info("power off smb347\n");
+			}
+			wake_unlock(&smb_lock);
+			wakelock_smb_count = false;
+		}	
+	}
+}
+EXPORT_SYMBOL_GPL(smb347_charger_vbus_draw);
+
 /* Convert register value to current using lookup table */
 static int hw_to_current(const unsigned int *tbl, size_t size, unsigned int val)
 {
@@ -205,7 +290,6 @@ static int hw_to_current(const unsigned int *tbl, size_t size, unsigned int val)
 static int current_to_hw(const unsigned int *tbl, size_t size, unsigned int val)
 {
 	size_t i;
-
 	for (i = 0; i < size; i++)
 		if (val < tbl[i])
 			break;
@@ -214,24 +298,163 @@ static int current_to_hw(const unsigned int *tbl, size_t size, unsigned int val)
 
 static int smb347_read(struct smb347_charger *smb, u8 reg)
 {
-	int ret;
+	int retry, ret;
+
+	if (smb->is_suspend)
+		return 0;
 
 	ret = i2c_smbus_read_byte_data(smb->client, reg);
+
 	if (ret < 0)
-		dev_warn(&smb->client->dev, "failed to read reg 0x%x: %d\n",
-			 reg, ret);
+	{
+		for(retry = 0; retry < I2C_RETRY_TIMES; retry++)
+		{
+			msleep(20);
+			ret = i2c_smbus_read_byte_data(smb->client, reg);
+			pr_info("%s i2c retry %d, reg 0x%x, ret 0x=%x\n", __FUNCTION__, retry, reg, ret);
+			if (ret < 0)
+				continue;
+			else
+				break;
+		}
+	}
+
 	return ret;
 }
 
 static int smb347_write(struct smb347_charger *smb, u8 reg, u8 val)
 {
-	int ret;
+	int retry, ret;
+
+	if (smb->is_suspend)
+		return 0;
 
 	ret = i2c_smbus_write_byte_data(smb->client, reg, val);
+
 	if (ret < 0)
-		dev_warn(&smb->client->dev, "failed to write reg 0x%x: %d\n",
-			 reg, ret);
+	{
+		for(retry = 0; retry < I2C_RETRY_TIMES; retry++)
+		{
+			msleep(20);
+			ret = i2c_smbus_write_byte_data(smb->client, reg, val);
+			pr_info("%s i2c retry %d, reg 0x%x, ret 0x=%x\n", __FUNCTION__, retry, reg, ret);
+			if (ret < 0)
+				continue;
+			else
+				break;
+		}
+	}
+
 	return ret;
+}
+
+static int smb347_suspend(bool val)
+{
+	int ret;
+
+        ret = smb347_read(the_chip, CMD_A);
+
+	if (!val)
+        	ret |= CMD_A_SUSPEND_ENABLED;
+	else
+        	ret &= ~CMD_A_SUSPEND_ENABLED;
+
+        ret = smb347_write(the_chip, CMD_A, ret);
+
+	return 0;
+}
+
+static int smb347_enable_set(void *data, u64 val)
+{
+	the_chip->charging_enabled = val;
+	return smb347_suspend(val);
+}
+
+static int smb347_enable_get(void *data, u64 *val)
+{
+	*val = the_chip->charging_enabled;
+	return 0;
+}
+
+/*
+ * smb347_set_writable - enables/disables writing to non-volatile registers
+ * @smb: pointer to smb347 charger instance
+ *
+ * You can enable/disable writing to the non-volatile configuration
+ * registers by calling this function.
+ *
+ * Returns %0 on success and negative errno in case of failure.
+ */
+static int smb347_set_writable(struct smb347_charger *smb, bool writable)
+{
+	int ret;
+
+	ret = smb347_read(smb, CMD_A);
+	if (ret < 0)
+		return ret;
+
+	if (writable)
+		ret |= CMD_A_ALLOW_WRITE;
+	else
+		ret &= ~CMD_A_ALLOW_WRITE;
+
+	return smb347_write(smb, CMD_A, ret);
+}
+
+void update_charger_type(struct smb347_charger *smb)
+{
+	int ret, cfg_ret, cmd_ret;
+	const struct smb347_charger_platform_data *pdata = smb->pdata;
+	static bool charging_gpio = false;
+
+#ifdef USB_IF
+	if (smb->charging_enabled)
+		smb347_suspend(1);
+#endif
+
+	ret = smb347_set_writable(smb, true);
+	if (ret < 0)
+                return;
+
+	cfg_ret = smb347_read(smb, CFG_PIN);
+	cfg_ret &= ~CFG_PIN_EN_CTRL_MASK;
+
+	cmd_ret = smb347_read(smb, CMD_B);
+
+	if(smb->mains_online){
+		cfg_ret &= ~CFG_PIN_EN_CTRL_USB_HC;
+		cfg_ret |= CFG_REG_EN;
+		cmd_ret |= CMD_B_HC_ENABLE;
+	}
+	else if(smb->usb_online){
+		cfg_ret |= CFG_PIN_EN_CTRL_USB_HC;
+		cfg_ret |= CFG_PIN_EN_CTRL_ACTIVE_LOW;
+		cmd_ret &= ~CMD_B_HC_ENABLE;
+
+		if (charging_gpio == false){
+			pdata->enable_charging(1);
+			charging_gpio = true;
+		}
+	}
+	else{
+		cfg_ret |= CFG_PIN_EN_CTRL_USB_HC;
+		cfg_ret |= CFG_PIN_EN_CTRL_ACTIVE_LOW;
+		cmd_ret &= ~CMD_B_HC_ENABLE;
+		if (charging_gpio == true){
+			pdata->enable_charging(0);
+			charging_gpio = false;
+		}
+#ifdef USB_IF
+		if((!charging_current) || (charging_current == 2))
+			smb347_suspend(0);
+#endif
+	}
+
+	/* Disable Automatic Power Source Detection (APSD) interrupt. */
+	cfg_ret &= ~CFG_PIN_EN_APSD_IRQ;
+
+	smb347_write(smb, CFG_PIN, cfg_ret);
+	smb347_write(smb, CMD_B, cmd_ret);
 }
 
 /**
@@ -244,27 +467,47 @@ static int smb347_write(struct smb347_charger *smb, u8 reg, u8 val)
  */
 static int smb347_update_status(struct smb347_charger *smb)
 {
-	bool usb = false;
-	bool dc = false;
-	int ret;
-
-	ret = smb347_read(smb, IRQSTAT_E);
-	if (ret < 0)
-		return ret;
+	bool charge	= false;
+	bool usb	= false;
+	bool dc		= false;
+	int ret = 0;
 
 	/*
 	 * Dc and usb are set depending on whether they are enabled in
 	 * platform data _and_ whether corresponding undervoltage is set.
 	 */
-	if (smb->pdata->use_mains)
-		dc = !(ret & IRQSTAT_E_DCIN_UV_STAT);
-	if (smb->pdata->use_usb)
-		usb = !(ret & IRQSTAT_E_USBIN_UV_STAT);
+	if ((smb->pdata->use_usb) || (smb->pdata->use_mains))		
+		charge = pm8921_is_usb_chg_plugged_in();
 
-	mutex_lock(&smb->lock);
-	ret = smb->mains_online != dc || smb->usb_online != usb;
-	smb->mains_online = dc;
-	smb->usb_online = usb;
+        if (charge == -EINVAL)
+               charge = 0;
+
+	if ((the_chip->charger_type_flags == POWER_SUPPLY_CHARGER_AC) && charge)
+	{
+		dc  = 1;
+		usb = 0;
+	}
+	else if ((the_chip->charger_type_flags == POWER_SUPPLY_CHARGER_USB) && charge)
+	{
+		dc  = 0;
+		usb = 1;
+	}
+	else if (!charge) {
+		dc  = 0;
+		usb = 0;
+	}
+
+	pr_debug("%s dc=%d usb=%d charge=%d charger_type=%d\n", __FUNCTION__, dc,
+		usb, charge, the_chip->charger_type_flags);
+	pr_debug(" wakelock_smb_count %d mains_online %d usb_online %d\n", wakelock_smb_count, the_chip->mains_online, the_chip->usb_online);
+	mutex_lock(&smb->lock);	
+
+        if ((smb->usb_online != usb) || (smb->mains_online != dc))
+		ret = 1;
+
+	if (!(smb->is_suspend))
+		update_charger_type(smb);
+
 	mutex_unlock(&smb->lock);
 
 	return ret;
@@ -300,6 +543,9 @@ static bool smb347_is_online(struct smb347_charger *smb)
 static int smb347_charging_status(struct smb347_charger *smb)
 {
 	int ret;
+
+	if(smb->is_suspend)
+		return 0;
 
 	if (!smb347_is_online(smb))
 		return 0;
@@ -354,24 +600,27 @@ static inline int smb347_charging_disable(struct smb347_charger *smb)
 static int smb347_update_online(struct smb347_charger *smb)
 {
 	int ret;
+	const struct smb347_charger_platform_data *pdata = smb->pdata;
 
 	/*
 	 * Depending on whether valid power source is connected or not, we
 	 * disable or enable the charging. We do it manually because it
 	 * depends on how the platform has configured the valid inputs.
 	 */
-	if (smb347_is_online(smb)) {
+	if (smb347_is_online(smb)) {	
+		pdata->enable_charging(1);
 		ret = smb347_charging_enable(smb);
 		if (ret < 0)
 			dev_err(&smb->client->dev,
 				"failed to enable charging\n");
+
 	} else {
+		pdata->enable_charging(0);
 		ret = smb347_charging_disable(smb);
 		if (ret < 0)
 			dev_err(&smb->client->dev,
 				"failed to disable charging\n");
 	}
-
 	return ret;
 }
 
@@ -412,7 +661,6 @@ static int smb347_set_charge_current(struct smb347_charger *smb)
 		ret &= ~CFG_CHARGE_CURRENT_TC_MASK;
 		ret |= val;
 	}
-
 	return smb347_write(smb, CFG_CHARGE_CURRENT, ret);
 }
 
@@ -443,7 +691,6 @@ static int smb347_set_current_limits(struct smb347_charger *smb)
 		ret &= ~CFG_CURRENT_LIMIT_USB_MASK;
 		ret |= val;
 	}
-
 	return smb347_write(smb, CFG_CURRENT_LIMIT, ret);
 }
 
@@ -617,8 +864,15 @@ static int smb347_set_temp_limits(struct smb347_charger *smb)
 	}
 
 	if (smb->pdata->charge_current_compensation) {
+
 		val = current_to_hw(ccc_tbl, ARRAY_SIZE(ccc_tbl),
 				    smb->pdata->charge_current_compensation);
+
+		if (battery_temperature <= smb->pdata->soft_cold_temp_limit)
+			val = current_to_hw(ccc_tbl, ARRAY_SIZE(ccc_tbl), SW_COLD_PROTECT_CURRENT);
+		else
+			val = current_to_hw(ccc_tbl, ARRAY_SIZE(ccc_tbl), SW_HOT_PROTECT_CURRENT);
+
 		if (val < 0)
 			return val;
 
@@ -637,31 +891,6 @@ static int smb347_set_temp_limits(struct smb347_charger *smb)
 	return ret;
 }
 
-/*
- * smb347_set_writable - enables/disables writing to non-volatile registers
- * @smb: pointer to smb347 charger instance
- *
- * You can enable/disable writing to the non-volatile configuration
- * registers by calling this function.
- *
- * Returns %0 on success and negative errno in case of failure.
- */
-static int smb347_set_writable(struct smb347_charger *smb, bool writable)
-{
-	int ret;
-
-	ret = smb347_read(smb, CMD_A);
-	if (ret < 0)
-		return ret;
-
-	if (writable)
-		ret |= CMD_A_ALLOW_WRITE;
-	else
-		ret &= ~CMD_A_ALLOW_WRITE;
-
-	return smb347_write(smb, CMD_A, ret);
-}
-
 static int smb347_hw_init(struct smb347_charger *smb)
 {
 	int ret;
@@ -674,6 +903,14 @@ static int smb347_hw_init(struct smb347_charger *smb)
 	 * Program the platform specific configuration values to the device
 	 * first.
 	 */
+	ret = smb347_read(smb, CFG_VARIOUS);
+	if (ret < 0)
+		goto fail;
+	ret &= ~CFG_VARIOUS_VCHG;
+	ret = smb347_write(smb, CFG_VARIOUS, ret);
+	if (ret < 0)
+		goto fail;
+
 	ret = smb347_set_charge_current(smb);
 	if (ret < 0)
 		goto fail;
@@ -714,6 +951,8 @@ static int smb347_hw_init(struct smb347_charger *smb)
 	ret &= ~CFG_OTHER_RID_MASK;
 	if (smb->pdata->use_usb_otg)
 		ret |= CFG_OTHER_RID_ENABLED_AUTO_OTG;
+
+	ret &= ~CFG_OTHER_LOW_BATTERY;
 
 	ret = smb347_write(smb, CFG_OTHER, ret);
 	if (ret < 0)
@@ -756,15 +995,28 @@ static int smb347_hw_init(struct smb347_charger *smb)
 	ret = smb347_update_online(smb);
 
 fail:
-	smb347_set_writable(smb, false);
+
 	return ret;
 }
 
 static irqreturn_t smb347_interrupt(int irq, void *data)
 {
 	struct smb347_charger *smb = data;
+	int irqstat_b;
 	int stat_c, irqstat_e, irqstat_c;
+	const struct smb347_charger_platform_data *pdata = smb->pdata;
 	irqreturn_t ret = IRQ_NONE;
+
+  	if(the_chip->is_suspend){
+		pdata->enable_power(1);
+		msleep(500);
+	}
+
+	irqstat_b = smb347_read(smb, IRQSTAT_B);
+	if (irqstat_b < 0) {
+		dev_warn(&smb->client->dev, "reading IRQSTAT_B failed\n");
+		return IRQ_NONE;
+	}
 
 	stat_c = smb347_read(smb, STAT_C);
 	if (stat_c < 0) {
@@ -791,12 +1043,21 @@ static irqreturn_t smb347_interrupt(int irq, void *data)
 	if (stat_c & STAT_C_CHARGER_ERROR) {
 		dev_err(&smb->client->dev,
 			"error in charger, disabling charging\n");
-
 		smb347_charging_disable(smb);
 		power_supply_changed(&smb->battery);
 
 		ret = IRQ_HANDLED;
 	}
+
+	/*
+	 * When Low battery, SMB347 will send a interrupt to wake up devices
+	 * so that devices can power down when ultra-low battery
+	 */
+	if (irqstat_b & (IRQSTAT_B_LOW_BATTERY_IRQ | IRQSTAT_B_LOW_BATTERY_STAT)) {
+		if (!pm8921_is_usb_chg_plugged_in())
+			pm_power_off();
+	}
+
 
 	/*
 	 * If we reached the termination current the battery is charged and
@@ -813,15 +1074,17 @@ static irqreturn_t smb347_interrupt(int irq, void *data)
 	 * If we got an under voltage interrupt it means that AC/USB input
 	 * was connected or disconnected.
 	 */
-	if (irqstat_e & (IRQSTAT_E_USBIN_UV_IRQ | IRQSTAT_E_DCIN_UV_IRQ)) {
+	if (!(irqstat_e & (IRQSTAT_E_USBIN_UV_STAT))){
 		if (smb347_update_status(smb) > 0) {
 			smb347_update_online(smb);
-			power_supply_changed(&smb->mains);
-			power_supply_changed(&smb->usb);
 		}
 		ret = IRQ_HANDLED;
 	}
 
+  	if(the_chip->is_suspend){
+		pdata->enable_power(0);
+	}
+	
 	return ret;
 }
 
@@ -845,7 +1108,8 @@ static int smb347_irq_set(struct smb347_charger *smb, bool enable)
 			goto fail;
 
 		ret = smb347_write(smb, CFG_STATUS_IRQ,
-				   CFG_STATUS_IRQ_TERMINATION_OR_TAPER);
+				   CFG_STATUS_IRQ_TERMINATION_OR_TAPER | 
+				   CFG_STATUS_IRQ_LOW_BATTERY);
 		if (ret < 0)
 			goto fail;
 
@@ -875,7 +1139,6 @@ static int smb347_irq_set(struct smb347_charger *smb, bool enable)
 	}
 
 fail:
-	smb347_set_writable(smb, false);
 	return ret;
 }
 
@@ -893,6 +1156,9 @@ static int smb347_irq_init(struct smb347_charger *smb)
 {
 	const struct smb347_charger_platform_data *pdata = smb->pdata;
 	int ret, irq = gpio_to_irq(pdata->irq_gpio);
+
+	gpio_tlmm_config(GPIO_CFG(pdata->irq_gpio, 0, GPIO_CFG_INPUT,
+                       GPIO_CFG_PULL_UP, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
 
 	ret = gpio_request_one(pdata->irq_gpio, GPIOF_IN, smb->client->name);
 	if (ret < 0)
@@ -927,12 +1193,11 @@ static int smb347_irq_init(struct smb347_charger *smb)
 	if (ret < 0)
 		goto fail_readonly;
 
-	smb347_set_writable(smb, false);
 	smb->client->irq = irq;
 	return 0;
 
 fail_readonly:
-	smb347_set_writable(smb, false);
+
 fail_irq:
 	free_irq(irq, smb);
 fail_gpio:
@@ -986,27 +1251,30 @@ static int smb347_battery_get_property(struct power_supply *psy,
 			container_of(psy, struct smb347_charger, battery);
 	const struct smb347_charger_platform_data *pdata = smb->pdata;
 	int ret;
+	bool charge;
 
-	ret = smb347_update_status(smb);
-	if (ret < 0)
-		return ret;
+	charge = pm8921_is_usb_chg_plugged_in();
+	if (charge == -EINVAL)
+		charge = 0;
+
+	if((!(the_chip->is_suspend)) || charge)
+		ret = smb347_update_status(smb);
 
 	switch (prop) {
 	case POWER_SUPPLY_PROP_STATUS:
-		if (!smb347_is_online(smb)) {
-			val->intval = POWER_SUPPLY_STATUS_DISCHARGING;
-			break;
-		}
-		if (smb347_charging_status(smb))
+		if ((charge) && (battery_capacity == 100))
+			val->intval = POWER_SUPPLY_STATUS_FULL;
+		else if (charge)
 			val->intval = POWER_SUPPLY_STATUS_CHARGING;
 		else
-			val->intval = POWER_SUPPLY_STATUS_FULL;
+			val->intval = POWER_SUPPLY_STATUS_DISCHARGING;
+		break;
+
+	case POWER_SUPPLY_PROP_HEALTH:
+		val->intval = POWER_SUPPLY_HEALTH_GOOD;
 		break;
 
 	case POWER_SUPPLY_PROP_CHARGE_TYPE:
-		if (!smb347_is_online(smb))
-			return -ENODATA;
-
 		/*
 		 * We handle trickle and pre-charging the same, and taper
 		 * and none the same.
@@ -1029,35 +1297,24 @@ static int smb347_battery_get_property(struct power_supply *psy,
 		break;
 
 	case POWER_SUPPLY_PROP_VOLTAGE_MIN_DESIGN:
-		val->intval = pdata->battery_info.voltage_min_design;
+		val->intval = 3200000;
 		break;
 
 	case POWER_SUPPLY_PROP_VOLTAGE_MAX_DESIGN:
-		val->intval = pdata->battery_info.voltage_max_design;
+		val->intval = 4200000;
 		break;
 
 	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
-		if (!smb347_is_online(smb))
-			return -ENODATA;
-		ret = smb347_read(smb, STAT_A);
-		if (ret < 0)
-			return ret;
-
-		ret &= STAT_A_FLOAT_VOLTAGE_MASK;
-		if (ret > 0x3d)
-			ret = 0x3d;
-
-		val->intval = 3500000 + ret * 20000;
+		val->intval = battery_mvolts;
 		break;
 
 	case POWER_SUPPLY_PROP_CURRENT_NOW:
-		if (!smb347_is_online(smb))
-			return -ENODATA;
+		if(smb->is_suspend){
+			val->intval = 0;
+			break;
+		}
 
 		ret = smb347_read(smb, STAT_B);
-		if (ret < 0)
-			return ret;
-
 		/*
 		 * The current value is composition of FCC and PCC values
 		 * and we can detect which table to use from bit 5.
@@ -1078,6 +1335,29 @@ static int smb347_battery_get_property(struct power_supply *psy,
 		val->intval = pdata->battery_info.charge_full_design;
 		break;
 
+	case POWER_SUPPLY_PROP_CAPACITY:
+		val->intval = battery_capacity;
+		break;
+
+	case POWER_SUPPLY_PROP_TEMP:
+		val->intval = battery_temperature;
+
+		if(smb->is_suspend)
+			break;
+
+		if (((battery_temperature <= (smb->pdata->soft_cold_temp_limit + 5)) ||
+			(battery_temperature >= (smb->pdata->soft_hot_temp_limit -5))) &&
+			(smb->is_temperature_protect == false))
+		{
+			smb->is_temperature_protect = true;
+			smb347_set_temp_limits(smb);
+		}
+		else if ((battery_temperature > smb->pdata->soft_cold_temp_limit) &&
+			(battery_temperature < smb->pdata->soft_hot_temp_limit))
+			smb->is_temperature_protect = false;
+
+		break;
+
 	case POWER_SUPPLY_PROP_MODEL_NAME:
 		val->strval = pdata->battery_info.name;
 		break;
@@ -1091,6 +1371,7 @@ static int smb347_battery_get_property(struct power_supply *psy,
 
 static enum power_supply_property smb347_battery_properties[] = {
 	POWER_SUPPLY_PROP_STATUS,
+	POWER_SUPPLY_PROP_HEALTH,
 	POWER_SUPPLY_PROP_CHARGE_TYPE,
 	POWER_SUPPLY_PROP_TECHNOLOGY,
 	POWER_SUPPLY_PROP_VOLTAGE_MIN_DESIGN,
@@ -1098,6 +1379,8 @@ static enum power_supply_property smb347_battery_properties[] = {
 	POWER_SUPPLY_PROP_VOLTAGE_NOW,
 	POWER_SUPPLY_PROP_CURRENT_NOW,
 	POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN,
+	POWER_SUPPLY_PROP_CAPACITY,
+	POWER_SUPPLY_PROP_TEMP,
 	POWER_SUPPLY_PROP_MODEL_NAME,
 };
 
@@ -1152,8 +1435,57 @@ static const struct file_operations smb347_debugfs_fops = {
 	.open		= smb347_debugfs_open,
 	.read		= seq_read,
 	.llseek		= seq_lseek,
-	.release	= single_release,
+	.release        = single_release,
 };
+
+DEFINE_SIMPLE_ATTRIBUTE(smb_enable_fops, smb347_enable_get,
+			smb347_enable_set, "%llu\n");
+
+static void smb347_debugfs_init(void)
+{
+  static struct dentry *debugfs_smb;
+
+  the_chip->charging_enabled = 1;
+
+  debugfs_smb = debugfs_create_dir("smb347", NULL);
+
+  debugfs_create_file("enable", 0644, debugfs_smb, NULL,
+			    &smb_enable_fops);
+
+}
+
+#ifdef CONFIG_HAS_EARLYSUSPEND
+void smb347_early_suspend(struct early_suspend *h)
+{
+	const struct smb347_charger_platform_data *pdata = the_chip->pdata;
+
+	pr_info("%s: enter\n", __func__);
+	the_chip->is_early_suspend = true;
+
+	if(!((wakelock_smb_count) || (smb347_is_online(the_chip)))){
+		pdata->enable_power(0);
+		the_chip->is_suspend = true;
+		pr_info("power off smb347\n");
+	}
+}
+
+void smb347_late_resume(struct early_suspend *h)
+{
+	const struct smb347_charger_platform_data *pdata = the_chip->pdata;
+
+	pr_info("%s: enter\n", __func__);
+	the_chip->is_early_suspend = false;
+
+	if(the_chip->is_suspend){
+		pdata->enable_power(1);
+		msleep(200);
+		smb347_hw_init(the_chip);
+		the_chip->is_suspend = false;
+		smb347_update_status(the_chip);
+		pr_info("power on smb347\n");
+	}
+}
+#endif
 
 static int smb347_probe(struct i2c_client *client,
 			const struct i2c_device_id *id)
@@ -1165,13 +1497,18 @@ static int smb347_probe(struct i2c_client *client,
 	int ret;
 
 	pdata = dev->platform_data;
+
+	pdata->platform_init(&client->dev);
+
 	if (!pdata)
 		return -EINVAL;
 
 	if (!pdata->use_mains && !pdata->use_usb)
 		return -EINVAL;
 
+	the_chip = devm_kzalloc(dev, sizeof(*the_chip), GFP_KERNEL);
 	smb = devm_kzalloc(dev, sizeof(*smb), GFP_KERNEL);
+
 	if (!smb)
 		return -ENOMEM;
 
@@ -1180,6 +1517,8 @@ static int smb347_probe(struct i2c_client *client,
 	mutex_init(&smb->lock);
 	smb->client = client;
 	smb->pdata = pdata;
+
+	the_chip = smb;
 
 	ret = smb347_hw_init(smb);
 	if (ret < 0)
@@ -1213,7 +1552,6 @@ static int smb347_probe(struct i2c_client *client,
 
 	ret = power_supply_register(dev, &smb->usb);
 	if (ret < 0) {
-		power_supply_unregister(&smb->mains);
 		return ret;
 	}
 
@@ -1236,8 +1574,22 @@ static int smb347_probe(struct i2c_client *client,
 		}
 	}
 
+#ifdef CONFIG_HAS_EARLYSUSPEND
+	smb->early_suspend.level = EARLY_SUSPEND_LEVEL_BLANK_SCREEN;
+	smb->early_suspend.suspend = smb347_early_suspend;
+	smb->early_suspend.resume = smb347_late_resume;
+	register_early_suspend(&smb->early_suspend);
+#endif
+
 	smb->dentry = debugfs_create_file("smb347-regs", S_IRUSR, NULL, smb,
 					  &smb347_debugfs_fops);
+	
+	smb->is_suspend=false;
+
+	smb347_debugfs_init();
+
+	wake_lock_init(&smb_lock, WAKE_LOCK_SUSPEND, "smb_lock");
+
 	return 0;
 }
 

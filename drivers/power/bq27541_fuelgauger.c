@@ -2,7 +2,7 @@
  * Copyright (C) 2008 Eurotech S.p.A. <info@eurotech.it>
  * Based on a previous work by Copyright (C) 2008 Texas Instruments, Inc.
  *
- * Copyright (c) 2011, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -34,6 +34,8 @@
 #include <linux/err.h>
 #include <linux/msm-charger.h>
 #include <linux/i2c/bq27520.h> /* use the same platform data as bq27520 */
+#include <linux/workqueue.h>
+#include <linux/wakelock.h>
 
 #define DRIVER_VERSION			"1.1.0"
 /* Bq27541 standard data commands */
@@ -99,6 +101,17 @@
 #define ZERO_DEGREE_CELSIUS_IN_TENTH_KELVIN   (-2731)
 #define BQ27541_INIT_DELAY   ((HZ)*1)
 
+#define	BATT_POLLING_TIME		(20 * HZ)
+#define POWER_SUPPLY_BOOT_CAPACITY	100
+#define I2C_RETRY_TIMES			10
+
+int battery_mvolts;
+int battery_capacity;
+int battery_temperature;
+short charge_current;
+int shutdown_counter;
+extern int pm8921_is_usb_chg_plugged_in(void);
+
 /* If the system has several batteries we need a different name for each
  * of them...
  */
@@ -114,9 +127,12 @@ struct bq27541_access_methods {
 struct bq27541_device_info {
 	struct device			*dev;
 	int				id;
+	bool				power_cable_boot;
 	struct bq27541_access_methods	*bus;
 	struct i2c_client		*client;
 	struct work_struct		counter;
+	struct workqueue_struct		*battery_queue;
+	struct delayed_work 		battery_work;
 	/* 300ms delay is needed after bq27541 is powered up
 	 * and before any successful I2C transaction
 	 */
@@ -125,6 +141,7 @@ struct bq27541_device_info {
 
 static int coulomb_counter;
 static spinlock_t lock; /* protect access to coulomb_counter */
+struct wake_lock bq27541_lock;
 
 static int bq27541_i2c_txsubcmd(u8 reg, unsigned short subcmd,
 		struct bq27541_device_info *di);
@@ -132,7 +149,66 @@ static int bq27541_i2c_txsubcmd(u8 reg, unsigned short subcmd,
 static int bq27541_read(u8 reg, int *rt_value, int b_single,
 			struct bq27541_device_info *di)
 {
-	return di->bus->read(reg, rt_value, b_single, di);
+	int retry, result;
+
+	result = di->bus->read(reg, rt_value, b_single, di);
+
+	if (result)
+	{
+		for(retry = 0; retry < I2C_RETRY_TIMES; retry++)
+		{
+			if (reg == BQ27541_REG_SOC)
+				msleep(100);
+			else
+				msleep(20);
+
+			result = di->bus->read(reg, rt_value, b_single, di);
+			pr_info("%s i2c retry %d, reg 0x%x, result 0x=%x\n", __FUNCTION__, retry, reg, result);
+			if (result)
+				continue;
+			else
+				break;
+		}
+	}
+	
+	return result;
+}
+
+/*
+ * Return the battery capacity
+ * Or < 0 if something fails.
+ */
+static int bq27541_battery_capacity(struct bq27541_device_info *di)
+{
+	int ret;
+	int cap = 0;
+
+	ret = bq27541_read(BQ27541_REG_SOC, &cap, 0, di);
+	if (ret) {
+		dev_err(di->dev, "error reading capacity\n");
+		return ret;
+	}
+
+	return cap;
+}
+
+
+/*
+ * Return the battery charging current
+ * Or < 0 if something fails.
+ */
+static int bq27541_battery_current(struct bq27541_device_info *di)
+{
+	int ret;
+	int battcurrent = 0;
+
+	ret = bq27541_read(BQ27541_REG_AI, &battcurrent, 0, di);
+	if (ret) {
+		dev_err(di->dev, "error reading current\n");
+		return ret;
+	}
+
+	return battcurrent;
 }
 
 /*
@@ -215,6 +291,7 @@ static int bq27541_chip_config(struct bq27541_device_info *di)
 	udelay(66);
 	ret = bq27541_read(BQ27541_REG_CNTL, &flags, 0, di);
 	if (ret < 0) {
+		di->power_cable_boot = true;
 		dev_err(di->dev, "error reading register %02x ret = %d\n",
 			 BQ27541_REG_CNTL, ret);
 		return ret;
@@ -281,6 +358,16 @@ static int bq27541_get_battery_mvolts(void)
 	return bq27541_battery_voltage(bq27541_di);
 }
 
+static int bq27541_get_battery_capacity(void)
+{
+	return bq27541_battery_capacity(bq27541_di);
+}
+
+static int bq27541_get_battery_current(void)
+{
+	return bq27541_battery_current(bq27541_di);
+}
+
 static int bq27541_get_battery_temperature(void)
 {
 	return bq27541_battery_temperature(bq27541_di);
@@ -304,6 +391,8 @@ static struct msm_battery_gauge bq27541_batt_gauge = {
 	.is_battery_present		= bq27541_is_battery_present,
 	.is_battery_temp_within_range	= bq27541_is_battery_temp_within_range,
 	.is_battery_id_valid		= bq27541_is_battery_id_valid,
+	.get_batt_remaining_capacity	= bq27541_get_battery_capacity,
+
 };
 static void bq27541_hw_config(struct work_struct *work)
 {
@@ -311,11 +400,15 @@ static void bq27541_hw_config(struct work_struct *work)
 	struct bq27541_device_info *di;
 
 	di  = container_of(work, struct bq27541_device_info, hw_config.work);
+	di->power_cable_boot = false;
+	shutdown_counter = 0;
+
 	ret = bq27541_chip_config(di);
 	if (ret) {
 		dev_err(di->dev, "Failed to config Bq27541\n");
 		return;
 	}
+
 	msm_battery_gauge_register(&bq27541_batt_gauge);
 
 	bq27541_cntl_cmd(di, BQ27541_SUBCMD_CTNL_STATUS);
@@ -330,7 +423,9 @@ static void bq27541_hw_config(struct work_struct *work)
 
 	dev_info(di->dev, "DEVICE_TYPE is 0x%02X, FIRMWARE_VERSION is 0x%02X\n",
 			type, fw_ver);
-	dev_info(di->dev, "Complete bq27541 configuration 0x%02X\n", flags);
+	dev_info(di->dev, "Complete bq27541 configuration 0x%02X, power_cable_boot = %d\n", 
+			flags, di->power_cable_boot);
+
 }
 
 static int bq27541_read_i2c(u8 reg, int *rt_value, int b_single,
@@ -470,6 +565,55 @@ static struct platform_device this_device = {
 };
 #endif
 
+static void msm_battery_update_psy_status(void)
+{
+	bool charge	= false;
+
+	if(bq27541_di->power_cable_boot){
+		battery_capacity = POWER_SUPPLY_BOOT_CAPACITY;
+		return;
+	}
+
+  	wake_lock(&bq27541_lock);
+	regulator_enable(regulator_lvs2);
+	msleep(200);
+	charge_current = (short) bq27541_get_battery_current();
+	udelay(100);
+	battery_temperature = bq27541_get_battery_temperature();
+	udelay(100);
+	battery_mvolts = bq27541_get_battery_mvolts();
+	udelay(100);
+	battery_capacity = bq27541_get_battery_capacity();	
+	udelay(100);
+
+	regulator_disable(regulator_lvs2);
+
+	printk("%s mvolts=%d capacity=%d temperature=%d charge_current=%d\n", __FUNCTION__,
+		(int) battery_mvolts, (int) battery_capacity, (int) battery_temperature, (short) charge_current);
+
+	charge = pm8921_is_usb_chg_plugged_in();
+	if (charge == -EINVAL)
+		charge = 0;
+
+	if (((battery_mvolts < 3150000) || (battery_capacity <= 0)) && (!charge)){
+		shutdown_counter++;
+		pr_info("%s: shutdown_counter = %d\n", __FUNCTION__, shutdown_counter);
+		if(!(shutdown_counter%5))
+			pm_power_off();
+	}
+	else
+		shutdown_counter = 0;
+
+	queue_delayed_work(bq27541_di->battery_queue, &(bq27541_di->battery_work), BATT_POLLING_TIME);
+
+	wake_unlock(&bq27541_lock);
+}
+
+static void msm_battery_worker(struct work_struct *work)
+{
+	msm_battery_update_psy_status();
+}
+
 static int bq27541_battery_probe(struct i2c_client *client,
 				 const struct i2c_device_id *id)
 {
@@ -478,10 +622,8 @@ static int bq27541_battery_probe(struct i2c_client *client,
 	struct bq27541_access_methods *bus;
 	int num;
 	int retval = 0;
-
 	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C))
 		return -ENODEV;
-
 	/* Get new ID for the new battery device */
 	retval = idr_pre_get(&battery_id, GFP_KERNEL);
 	if (retval == 0)
@@ -533,6 +675,8 @@ static int bq27541_battery_probe(struct i2c_client *client,
 		goto batt_failed_4;
 #endif
 
+	regulator_lvs2 = regulator_get(di->dev, "bq27541_lvs2");
+
 	if (retval) {
 		dev_err(&client->dev, "failed to setup bq27541\n");
 		goto batt_failed_4;
@@ -543,12 +687,20 @@ static int bq27541_battery_probe(struct i2c_client *client,
 		goto batt_failed_4;
 	}
 
+        wake_lock_init(&bq27541_lock, WAKE_LOCK_SUSPEND, "bq27541_lock");
+  
 	spin_lock_init(&lock);
 
 	bq27541_di = di;
 	INIT_WORK(&di->counter, bq27541_coulomb_counter_work);
 	INIT_DELAYED_WORK(&di->hw_config, bq27541_hw_config);
 	schedule_delayed_work(&di->hw_config, BQ27541_INIT_DELAY);
+
+	bq27541_di->battery_queue = create_singlethread_workqueue("battery_queue");
+
+	INIT_DELAYED_WORK(&(bq27541_di->battery_work), msm_battery_worker);
+	queue_delayed_work(bq27541_di->battery_queue, &(bq27541_di->battery_work), (5 * HZ));
+
 	return 0;
 
 batt_failed_4:
@@ -603,7 +755,6 @@ static struct i2c_driver bq27541_battery_driver = {
 static int __init bq27541_battery_init(void)
 {
 	int ret;
-
 	ret = i2c_add_driver(&bq27541_battery_driver);
 	if (ret)
 		printk(KERN_ERR "Unable to register BQ27541 driver\n");

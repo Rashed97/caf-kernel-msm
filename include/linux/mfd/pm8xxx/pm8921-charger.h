@@ -18,6 +18,12 @@
 
 #define PM8921_CHARGER_DEV_NAME	"pm8921-charger"
 
+#ifdef CONFIG_BATTERY_BQ27541
+extern int battery_mvolts;
+extern int battery_capacity;
+extern int battery_temperature;
+#endif
+
 struct pm8xxx_charger_core_data {
 	unsigned int	vbat_channel;
 	unsigned int	batt_temp_channel;
@@ -165,7 +171,6 @@ struct pm8921_charger_platform_data {
 	unsigned int			warm_bat_chg_current;
 	unsigned int			cool_bat_voltage;
 	unsigned int			warm_bat_voltage;
-	int				hysteresis_temp;
 	unsigned int			(*get_batt_capacity_percent) (void);
 	int64_t				batt_id_min;
 	int64_t				batt_id_max;

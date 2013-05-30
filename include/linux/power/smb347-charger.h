@@ -17,6 +17,29 @@
 #include <linux/types.h>
 #include <linux/power_supply.h>
 
+#define IDEV_CHG_MAX	1500
+#define IDEV_CHG_MIN	500
+#define IUNIT		100
+
+/* Turn on USB_IF for average current test, but smb347 will not longer support car charging.*/
+//#define USB_IF
+
+extern int pm8921_is_usb_chg_plugged_in(void);
+//extern int pm8921_is_dc_chg_plugged_in(void);
+
+extern int battery_mvolts;
+extern int battery_capacity;
+extern int battery_temperature;
+extern bool power_off_charging;
+
+void smb347_charger_vbus_draw(unsigned int mA);
+
+enum {
+	POWER_SUPPLY_CHARGER_REMOVE = 0,
+	POWER_SUPPLY_CHARGER_USB,
+	POWER_SUPPLY_CHARGER_AC,
+};
+
 enum {
 	/* use the default compensation method */
 	SMB347_SOFT_TEMP_COMPENSATE_DEFAULT = -1,
@@ -111,7 +134,10 @@ struct smb347_charger_platform_data {
 	bool		use_usb;
 	bool		use_usb_otg;
 	int		irq_gpio;
-	enum smb347_chg_enable enable_control;
+	enum 		smb347_chg_enable enable_control;
+	int 		(*platform_init)(struct device *dev);
+	void		(*enable_power)(bool on);
+	void		(*enable_charging)(bool on);
 };
 
 #endif /* SMB347_CHARGER_H */

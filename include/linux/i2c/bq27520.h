@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2011, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -23,4 +23,5 @@ struct bq27520_platform_data {
 	int enable_dlog; /* if enable on-chip coulomb counter data logger */
 };
 
+static struct regulator *regulator_lvs2;
 #endif /* __LINUX_BQ27520_H */

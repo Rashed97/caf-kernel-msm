@@ -2126,6 +2126,121 @@ static struct i2c_board_info mxt_device_info_8930[] __initdata = {
 	},
 };
 
+#ifdef CONFIG_CHARGER_SMB347
+#define CHG_HC_EN				150
+#define CHG_STAT				6
+#define CHG_INOK				55
+#define CHG_VCHG				90
+#define CFG_PIN_EN_CTRL_ACTIVE_LOW		0x60
+static struct regulator *regulator_lvs2;
+static struct regulator *regulator_lvs1;
+static struct regulator *regulator_l9;
+
+static void smb_init_power(bool on)
+{
+
+	pr_info("***%s***on=%d\n", __FUNCTION__, on);
+
+	if (on) {	
+		regulator_enable(regulator_lvs2);
+		regulator_enable(regulator_l9);
+		regulator_enable(regulator_lvs1);
+	}
+	else{
+		regulator_disable(regulator_lvs1);
+		regulator_disable(regulator_l9);
+		regulator_disable(regulator_lvs2);
+	}
+
+}
+
+static void smb_enable_charging(bool on)
+{
+	pr_info("***%s***on=%d\n", __FUNCTION__, on);
+
+	if (on) {
+		if (gpio_direction_output(CHG_HC_EN,1)){
+			pr_err("%s.failed to set smb347_cur_selector=%d.\n",
+			__FUNCTION__, CHG_HC_EN);
+		}
+	}
+	else{
+		if (gpio_direction_output(CHG_HC_EN,0)){
+			pr_err("%s.failed to set smb347_cur_selector=%d.\n",
+			__FUNCTION__, CHG_HC_EN);
+		}
+	}
+}
+
+static int smb347_init(struct device *dev)
+{
+	pr_info("***%s***\n", __FUNCTION__);
+	regulator_lvs2 = regulator_get(dev, "smb_lvs2");
+	regulator_lvs1 = regulator_get(dev, "smb_lvs1");
+	regulator_l9   = regulator_get(dev, "smb_l9");
+
+	smb_init_power(1);
+
+	if (gpio_request(CHG_INOK, "CHG_INOK"))
+		pr_err("%s.failed to get smb347_SYSOK=%d.\n",
+		__FUNCTION__, CHG_INOK);
+        if (gpio_request(CHG_HC_EN, "CHG_HC_EN"))
+                pr_err("%s.failed to get smb347_CHG_HC_EN=%d.\n",
+                __FUNCTION__, CHG_HC_EN);
+        if (gpio_request(CHG_VCHG, "CHG_VCHG"))
+                pr_err("%s.failed to get smb347_CHG_VCHG=%d.\n",
+                __FUNCTION__, CHG_VCHG);
+
+	return 0;
+}
+
+static struct smb347_charger_platform_data smb347_data = {
+       .max_charge_current=2500000,
+       .max_charge_voltage=4200000,
+       .pre_charge_current=250000,
+       .termination_current=150000,
+       .pre_to_fast_voltage=3000000,
+       .mains_current_limit=2000000,
+       .usb_hc_current_limit=2000000,
+       .chip_temp_threshold=120,
+       .soft_cold_temp_limit=10,
+       .soft_hot_temp_limit=50,
+       .hard_cold_temp_limit=5,
+       .hard_hot_temp_limit=55,
+       .suspend_on_hard_temp_limit=1,
+       .soft_temp_limit_compensation=SMB347_SOFT_TEMP_COMPENSATE_CURRENT,
+       .charge_current_compensation=1200000,
+       .irq_gpio=6,
+       .enable_control=CFG_PIN_EN_CTRL_ACTIVE_LOW,
+       .use_mains=1,
+       .use_usb=1,
+       .use_usb_otg=0,
+       .enable_power=smb_init_power,
+       .enable_charging=smb_enable_charging,
+       .platform_init = smb347_init,
+       .battery_info.technology=POWER_SUPPLY_TECHNOLOGY_LION,
+};
+
+static struct i2c_board_info smb347_dev[] __initdata= {
+        {
+                I2C_BOARD_INFO("smb347", 0x35),
+                .platform_data = &smb347_data,
+        },
+};
+#endif
+
+#ifdef CONFIG_BATTERY_BQ27541
+static struct bq27520_platform_data bq27541_pdata = {
+	.name           = "fuel-gauge",
+};
+
+static struct i2c_board_info msm_bq27541_board_info[] __initdata= {
+        {
+                I2C_BOARD_INFO("bq27541", 0x55),
+                .platform_data = &bq27541_pdata,
+        },
+};
+#endif
 
 #ifdef CONFIG_SND_SOC_MIC_BIASE_SWITCH
 #define GPIO_HS_SWITCH 65
@@ -2515,6 +2630,11 @@ static struct msm_i2c_platform_data msm8960_i2c_qup_gsbi10_pdata = {
 	.src_clk_rate = 24000000,
 };
 
+static struct msm_i2c_platform_data msm8960_i2c_qup_gsbi11_pdata = {
+       .clk_freq = 100000,
+       .src_clk_rate = 24000000,
+};
+
 static struct msm_i2c_platform_data msm8960_i2c_qup_gsbi12_pdata = {
 	.clk_freq = 100000,
 	.src_clk_rate = 24000000,
@@ -2686,6 +2806,7 @@ static struct platform_device *common_devices[] __initdata = {
 	&msm8960_device_qup_spi_gsbi1,
 	&msm8960_device_qup_i2c_gsbi3,
 	&msm8960_device_qup_i2c_gsbi10,
+	&msm8960_device_qup_i2c_gsbi11,
 	&msm8960_device_qup_i2c_gsbi12,
 	&msm_slim_ctrl,
 	&msm_device_wcnss_wlan,
@@ -2833,6 +2954,9 @@ static void __init msm8930_i2c_init(void)
 
 	msm8960_device_qup_i2c_gsbi10.dev.platform_data =
 					&msm8960_i2c_qup_gsbi10_pdata;
+
+        msm8960_device_qup_i2c_gsbi11.dev.platform_data =
+                                        &msm8960_i2c_qup_gsbi11_pdata;
 
 	msm8960_device_qup_i2c_gsbi12.dev.platform_data =
 					&msm8960_i2c_qup_gsbi12_pdata;
@@ -3106,6 +3230,22 @@ static struct i2c_registry msm8960_i2c_devices[] __initdata = {
 		sii_device_info,
 		ARRAY_SIZE(sii_device_info),
 	},
+#ifdef CONFIG_BATTERY_BQ27541
+ 	{
+		I2C_SURF | I2C_FFA | I2C_FLUID,
+		MSM_8930_GSBI11_QUP_I2C_BUS_ID,
+        	msm_bq27541_board_info,
+		ARRAY_SIZE(msm_bq27541_board_info),
+	},
+#endif
+#ifdef CONFIG_CHARGER_SMB347
+ 	{
+		I2C_SURF | I2C_FFA | I2C_FLUID,
+		MSM_8930_GSBI11_QUP_I2C_BUS_ID,
+        	smb347_dev,
+		ARRAY_SIZE(smb347_dev),
+	},
+#endif
 #ifdef CONFIG_STM_LIS3DH
 	{
 		I2C_FFA | I2C_FLUID | I2C_EVT,
