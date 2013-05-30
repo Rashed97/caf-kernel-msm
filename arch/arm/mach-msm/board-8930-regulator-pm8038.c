@@ -72,9 +72,11 @@ VREG_CONSUMERS(L9) = {
 	REGULATOR_SUPPLY("cam_vana",		"4-001a"),
 	REGULATOR_SUPPLY("cam_vana",		"4-006c"),
 	REGULATOR_SUPPLY("cam_vana",		"4-0048"),
+	REGULATOR_SUPPLY("cam_vana",		"4-0036"),
 	REGULATOR_SUPPLY("cam_vaf",		"4-001a"),
 	REGULATOR_SUPPLY("cam_vaf",		"4-006c"),
 	REGULATOR_SUPPLY("cam_vaf",		"4-0048"),
+	REGULATOR_SUPPLY("cam_vaf",		"4-0036"),
 	REGULATOR_SUPPLY("cam_vana",            "4-0020"),
 	REGULATOR_SUPPLY("cam_vaf",             "4-0020"),
 /* Regulators for 8930 QRD SGLTE EVT */
@@ -119,6 +121,7 @@ VREG_CONSUMERS(L11) = {
 	REGULATOR_SUPPLY("i2c_src",             "12-0018"),
 	REGULATOR_SUPPLY("i2c_src",             "12-000c"),
 	REGULATOR_SUPPLY("i2c_src",             "12-001c"),
+	REGULATOR_SUPPLY("cam_vdig",            "4-0036"),
 };
 VREG_CONSUMERS(L12) = {
 	REGULATOR_SUPPLY("8038_l12",		NULL),
@@ -244,6 +247,7 @@ VREG_CONSUMERS(LVS1) = {
 	REGULATOR_SUPPLY("acc_i2c",		    "12-0018"),
 	REGULATOR_SUPPLY("hscd_i2c",		"12-000c"),
 	REGULATOR_SUPPLY("als_i2c",		    "12-001c"),
+	REGULATOR_SUPPLY("cam_vio",             "4-0036"),
 };
 VREG_CONSUMERS(LVS2) = {
 	REGULATOR_SUPPLY("8038_lvs2",		NULL),
@@ -540,7 +544,7 @@ msm8930_rpm_regulator_init_data[] __devinitdata = {
 
 	/*	ID     a_on pd ss min_uV   max_uV  supply  sys_uA init_ip */
 	RPM_LDO(L1,	 0, 1, 0, 1300000, 1300000, "8038_s2", 0, 0),
-	RPM_LDO(L2,	 0, 1, 0, 1200000, 1200000, "8038_s2", 0, 0),
+	RPM_LDO(L2,	 1, 1, 0, 1200000, 1200000, "8038_s2", 0, 0),
 	RPM_LDO(L3,	 0, 1, 0, 3075000, 3075000, NULL,      0, 0),
 	RPM_LDO(L4,	 1, 1, 0, 1800000, 1800000, NULL,      10000, 10000),
 	RPM_LDO(L5,	 0, 1, 0, 2950000, 2950000, NULL,      0, 0),
@@ -565,11 +569,11 @@ msm8930_rpm_regulator_init_data[] __devinitdata = {
 	RPM_LDO(L26,     1, 1, 0, 1050000, 1050000, "8038_s2", 10000, 10000),
 
 	/*	ID     a_on pd ss		    supply */
-	RPM_VS(LVS1,	 0, 1, 0,		    "8038_l11"),
-	RPM_VS(LVS2,	 0, 1, 0,		    "8038_l11"),
+	RPM_VS(LVS1,	 1, 1, 0,		    "8038_l11"),
+	RPM_VS(LVS2,	 1, 1, 0,		    "8038_l11"),
 
 	/*	   ID            a_on ss min_corner  max_corner  supply */
-	RPM_CORNER(VDD_DIG_CORNER, 0, 1, RPM_VREG_CORNER_NONE,
+	RPM_CORNER(VDD_DIG_CORNER, 1, 1, RPM_VREG_CORNER_NONE,
 		RPM_VREG_CORNER_HIGH, NULL),
 };
 
