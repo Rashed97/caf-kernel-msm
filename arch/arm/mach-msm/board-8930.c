@@ -3378,6 +3378,8 @@ static void __init msm8930_pm8917_pdata_fixup(void)
 }
 
 extern int power_on_mode;
+extern bool power_key_press;
+#define SHORT_PRESS_POWER_KEY_BOOT	0x77665506
 
 static void check_power_on_reason(void)
 {
@@ -3386,8 +3388,13 @@ static void check_power_on_reason(void)
 
 	boot_reason = *(unsigned int *)
 		(smem_get_entry(SMEM_POWER_ON_STATUS_INFO, &smem_size));
-
+	
 	printk("Boot Reason = 0x%02x power_on_mode=0x%08x\n", boot_reason, power_on_mode);
+
+	/* For the feature to shutdown device when short press power key boot. */
+	if (power_on_mode == SHORT_PRESS_POWER_KEY_BOOT)
+			pm_power_off();
+		
 }
 
 static void __init msm8930_cdp_init(void)
