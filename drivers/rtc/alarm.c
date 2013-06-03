@@ -574,7 +574,7 @@ static int alarm_suspend(struct platform_device *pdev, pm_message_t state)
 			hrtimer_get_expires(&wakeup_queue->timer)),
 			rtc_delta).tv_sec;
 
-		rtc_time_to_tm((rtc_alarm_time - poweroffalarm_adjusttime), &rtc_alarm.time);
+		rtc_time_to_tm(rtc_alarm_time, &rtc_alarm.time);
 		rtc_alarm.enabled = 1;
 		rtc_set_alarm(alarm_rtc_dev, &rtc_alarm);
 		rtc_read_time(alarm_rtc_dev, &rtc_current_rtc_time);
