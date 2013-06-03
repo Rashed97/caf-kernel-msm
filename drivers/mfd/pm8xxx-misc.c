@@ -519,6 +519,8 @@ read_write_err:
 	return rc;
 }
 
+void set_alarm_deviceup_adjusttime(void);
+
 /**
  * pm8xxx_reset_pwr_off - switch all PM8XXX PMIC chips attached to the system to
  *			  either reset or shutdown when they are turned off
@@ -532,8 +534,9 @@ int pm8xxx_reset_pwr_off(int reset)
 	unsigned long flags;
 	int rc = 0;
 
-	/* For the leakage current from Backlight IC, Turn off backlight before shutdown. */
+        set_alarm_deviceup_adjusttime();
 
+	/* For the leakage current from Backlight IC, Turn off backlight before shutdown. */
 	rc = gpio_request(BACKLIGHT_EN, "POWER_OFF");
 	gpio_direction_output(BACKLIGHT_EN, 0);
 

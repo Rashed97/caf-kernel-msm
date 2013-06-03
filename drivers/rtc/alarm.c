@@ -258,13 +258,13 @@ int get_alarm_rtc_deviceup_type(void)
 };
 
 static unsigned long poweroffalarm_adjusttime = 120;
+static unsigned long alarmtime = 0;
 
 static int
 rtc_set_deviceup(struct rtc_device *rtc_dev, struct rtc_wkalrm *alarm)
 {
 	unsigned long Expiration = 0;
 	unsigned long now = get_seconds();
-	unsigned long alarmtime = 0;
 	struct rtc_wkalrm rtc_alarmtime;
 
 	rtc_tm_to_time(&alarm->time, &alarmtime);
@@ -276,7 +276,7 @@ rtc_set_deviceup(struct rtc_device *rtc_dev, struct rtc_wkalrm *alarm)
 
 	if (Expiration >= poweroffalarm_adjusttime) {
 		rtc_alarmtime.enabled = 1;
-		rtc_time_to_tm((alarmtime - poweroffalarm_adjusttime), &rtc_alarmtime.time);
+		rtc_time_to_tm(alarmtime, &rtc_alarmtime.time);
 		rtc_alarmtime.pending = 0;
 		rtc_set_alarm(rtc_dev, &rtc_alarmtime);
 		printk(KERN_EMERG
@@ -291,6 +291,18 @@ rtc_set_deviceup(struct rtc_device *rtc_dev, struct rtc_wkalrm *alarm)
 	}
 	return 0;
 }
+
+void set_alarm_deviceup_adjusttime(void)
+{
+    struct rtc_wkalrm rtc_alarmtime;
+
+    if(alarmtime != 0 && alarm_rtc_dev != NULL) {
+        rtc_alarmtime.enabled = 1;
+        rtc_time_to_tm((alarmtime - poweroffalarm_adjusttime), &rtc_alarmtime.time);
+        rtc_alarmtime.pending = 0;
+        rtc_set_alarm(alarm_rtc_dev, &rtc_alarmtime);
+    }
+};
 
 void set_alarm_deviceup_dev(ktime_t end)
 {
