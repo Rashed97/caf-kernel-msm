@@ -38,7 +38,7 @@ static struct delayed_work cancel_vote_work;
 static void *riva_ramdump_dev;
 static int riva_crash;
 static int ss_restart_inprogress;
-static int enable_riva_ssr;
+static int enable_riva_ssr = 1;
 static struct subsys_device *riva_8960_dev;
 
 struct wcnss_pmic_dump {
