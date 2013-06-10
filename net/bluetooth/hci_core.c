@@ -673,7 +673,7 @@ static int hci_dev_do_close(struct hci_dev *hdev, u8 is_process)
 	if (!test_bit(HCI_RAW, &hdev->flags)) {
 		set_bit(HCI_INIT, &hdev->flags);
 		__hci_request(hdev, hci_reset_req, 0,
-					msecs_to_jiffies(250));
+					msecs_to_jiffies(250 * 4));
 		clear_bit(HCI_INIT, &hdev->flags);
 	}
 
