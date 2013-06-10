@@ -673,6 +673,12 @@ static int __devinit isa1200_probe(struct i2c_client *client,
 					__func__, pdata->hap_en_gpio);
 			goto hen_gpio_fail;
 		}
+		ret = gpio_direction_output(pdata->hap_en_gpio, 0);
+		if (ret) {
+			dev_err(&client->dev, "%s: gpio %d set direction failed\n",
+					__func__, pdata->hap_en_gpio);
+			goto hen_gpio_direction_fail;
+		}
 	} else {
 		dev_err(&client->dev, "%s: Invalid gpio %d\n", __func__,
 					pdata->hap_en_gpio);
@@ -689,6 +695,12 @@ static int __devinit isa1200_probe(struct i2c_client *client,
 				"%s: gpio %d request failed\n",
 				__func__, pdata->hap_len_gpio);
 			goto len_gpio_fail;
+		}
+		ret = gpio_direction_output(pdata->hap_len_gpio, 0);
+		if (ret) {
+			dev_err(&client->dev, "%s: gpio %d set direction failed\n",
+					__func__, pdata->hap_len_gpio);
+			goto len_gpio_direction_fail;
 		}
 	} else {
 		dev_err(&client->dev, "%s: gpio is not used/Invalid %d\n",
@@ -731,9 +743,11 @@ reset_hctrl0:
 	i2c_smbus_write_byte_data(client, ISA1200_HCTRL0,
 					ISA1200_HCTRL0_RESET);
 setup_fail:
+len_gpio_direction_fail:
 	if (haptic->is_len_gpio_valid == true)
 		gpio_free(pdata->hap_len_gpio);
 len_gpio_fail:
+hen_gpio_direction_fail:
 	gpio_free(pdata->hap_en_gpio);
 hen_gpio_fail:
 	timed_output_dev_unregister(&haptic->dev);
