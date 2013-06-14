@@ -202,7 +202,12 @@ static void msm_restart_prepare(const char *cmd)
 		set_dload_mode(1);
                 //let the device go to download if mode is RESTART_DLOAD
                 download_mode = 1;
-        }
+
+		/* set MAGIC to prevent SD RAMDUMP */
+		__raw_writel(1, dload_mode_addr + (sizeof(unsigned int) * 6));
+	} else {
+		__raw_writel(0, dload_mode_addr + (sizeof(unsigned int) * 6));
+	}
 	/* Kill download mode if master-kill switch is set */
 	if (!download_mode)
 		set_dload_mode(0);
