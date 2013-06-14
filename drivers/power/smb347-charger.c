@@ -1054,8 +1054,10 @@ static irqreturn_t smb347_interrupt(int irq, void *data)
 	 * so that devices can power down when ultra-low battery
 	 */
 	if (irqstat_b & (IRQSTAT_B_LOW_BATTERY_IRQ | IRQSTAT_B_LOW_BATTERY_STAT)) {
-		if (!pm8921_is_usb_chg_plugged_in())
-			pm_power_off();
+		if (!pm8921_is_usb_chg_plugged_in()){
+			pr_info("%s: Low battery IRQ", __FUNCTION__);
+			//pm_power_off();
+		}
 	}
 
 

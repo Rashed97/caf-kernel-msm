@@ -595,7 +595,7 @@ static void msm_battery_update_psy_status(void)
 	if (charge == -EINVAL)
 		charge = 0;
 
-	if (((battery_mvolts < 3150000) || (battery_capacity <= 0)) && (!charge)){
+	if (((battery_mvolts < 2900000) || (battery_capacity <= 0)) && (!charge)){
 		shutdown_counter++;
 		pr_info("%s: shutdown_counter = %d\n", __FUNCTION__, shutdown_counter);
 		if(!(shutdown_counter%5))
