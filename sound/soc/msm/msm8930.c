@@ -144,6 +144,8 @@ static int msm8930_cfg_spkr_gpio(int gpio,
 static void msm8960_ext_spk_power_amp_on(u32 spk)
 {
 	int ret = 0;
+    gpio_set_value(15, 1);
+    gpio_set_value(63, 1);
 
 	if (spk & (SPK_AMP_POS | SPK_AMP_NEG)) {
 		if ((msm8930_ext_spk_pamp & SPK_AMP_POS) &&
@@ -202,6 +204,8 @@ static void msm8960_ext_spk_power_amp_on(u32 spk)
 
 static void msm8960_ext_spk_power_amp_off(u32 spk)
 {
+    gpio_set_value(15, 0);
+    gpio_set_value(63, 0);
 	if (spk & (SPK_AMP_POS | SPK_AMP_NEG)) {
 		if (!msm8930_ext_spk_pamp)
 			return;
@@ -1321,6 +1325,37 @@ static int msm8930_configure_headset_mic_gpios(void)
 	msm8930_headset_gpios_configured = 0;
 	return 0;
 }
+static int msm8930_configure_speaker_power_gpios(void)
+{
+	int ret;
+	ret = gpio_request(15, "SPK_BOOST_EN");
+	if (ret) {
+		pr_err("%s: Failed to request gpio 80\n", __func__);
+		goto fail_5v_boost;
+	}
+	ret = gpio_direction_output(15, 1);
+	if (ret) {
+		pr_err("%s: Unable to set direction\n", __func__);
+		goto fail_5v_boost;
+	}
+	ret = gpio_request(63, "5V_BOOST_EN");
+	if (ret) {
+		pr_err("%s: Failed to request gpio 80\n", __func__);
+		goto fail_spk_boost;
+	}
+	ret = gpio_direction_output(63, 1);
+	if (ret) {
+		pr_err("%s: Unable to set direction\n", __func__);
+		goto fail_spk_boost;
+	}
+	return 0;
+
+fail_spk_boost:
+	gpio_free(63);
+fail_5v_boost:
+	gpio_free(15);
+	return ret;
+}
 static void msm8930_free_headset_mic_gpios(void)
 {
 	if (msm8930_headset_gpios_configured)
@@ -1355,6 +1390,7 @@ static int __init msm8930_audio_init(void)
 		kfree(mbhc_cfg.calibration);
 		return ret;
 	}
+    msm8930_configure_speaker_power_gpios();
 
 	if (msm8930_configure_headset_mic_gpios()) {
 		pr_err("%s Fail to configure headset mic gpios\n", __func__);
