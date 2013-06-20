@@ -341,7 +341,7 @@ static void accsns_early_suspend(struct early_suspend *handler)
 #ifdef ALPS_ACC_DEBUG
     printk("[ACC] early_suspend\n");
 #endif
-    accsns_suspend(client_accsns, PMSG_SUSPEND);
+    //accsns_suspend(client_accsns, PMSG_SUSPEND);
 }
 
 static void accsns_early_resume(struct early_suspend *handler)
@@ -349,7 +349,7 @@ static void accsns_early_resume(struct early_suspend *handler)
 #ifdef ALPS_ACC_DEBUG
     printk("[ACC] early_resume\n");
 #endif
-    accsns_resume(client_accsns);
+    //accsns_resume(client_accsns);
 }
 #endif
 
@@ -365,10 +365,8 @@ static struct i2c_driver accsns_driver = {
     .driver    = {
         .name  = ACC_DRIVER_NAME,
     },
-#ifndef CONFIG_HAS_EARLYSUSPEND
     .suspend   = accsns_suspend,
     .resume    = accsns_resume,
-#endif
 };
 
 #ifdef CONFIG_HAS_EARLYSUSPEND

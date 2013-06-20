@@ -491,7 +491,7 @@ static void hscd_early_suspend(struct early_suspend *handler)
 #ifdef ALPS_DEBUG
     printk("[HSCD] early_suspend\n");
 #endif
-    hscd_suspend(client_hscd, PMSG_SUSPEND);
+    //hscd_suspend(client_hscd, PMSG_SUSPEND);
 }
 
 static void hscd_early_resume(struct early_suspend *handler)
@@ -499,7 +499,7 @@ static void hscd_early_resume(struct early_suspend *handler)
 #ifdef ALPS_DEBUG
     printk("[HSCD] early_resume\n");
 #endif
-    hscd_resume(client_hscd);
+    //hscd_resume(client_hscd);
 }
 #endif
 
@@ -515,10 +515,8 @@ static struct i2c_driver hscd_driver = {
     .driver   = {
         .name = HSCD_DRIVER_NAME,
     },
-#ifndef CONFIG_HAS_EARLYSUSPEND
     .suspend  = hscd_suspend,
     .resume   = hscd_resume,
-#endif
 };
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
