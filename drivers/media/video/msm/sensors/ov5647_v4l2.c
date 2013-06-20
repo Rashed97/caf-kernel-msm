@@ -17,7 +17,9 @@
 #define PLATFORM_DRIVER_NAME "msm_camera_ov5647"
 #define ov5647_obj ov5647_##obj
 #define RESET 0
+#define GAIN_VALUE 20
 int flash_cnt;
+int flash_stat;
 
 static struct msm_sensor_ctrl_t ov5647_s_ctrl;
 
@@ -444,6 +446,11 @@ static int32_t ov5647_write_pict_exp_gain(struct msm_sensor_ctrl_t *s_ctrl,
 	uint8_t gain_lsb, gain_hsb;
 	u8 intg_time_hsb, intg_time_msb, intg_time_lsb;
 
+	if(flash_stat == FLASH_ON && gain <= GAIN_VALUE){
+		gain = 25;
+		line = 2000;
+	}
+
 	gain_lsb = (uint8_t) (gain);
 	gain_hsb = (uint8_t)((gain & 0x300)>>8);
 
@@ -539,6 +546,7 @@ static int32_t ov5647_write_pict_exp_gain(struct msm_sensor_ctrl_t *s_ctrl,
 		MSM_CAMERA_I2C_BYTE_DATA);
 
 
+	flash_stat = FLASH_OFF;
 	s_ctrl->func_tbl->sensor_group_hold_off(s_ctrl);
 	return 0;
 

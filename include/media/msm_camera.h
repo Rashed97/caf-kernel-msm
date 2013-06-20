@@ -264,6 +264,11 @@ struct msm_mctl_post_proc_cmd {
 	struct msm_mctl_pp_cmd cmd;
 };
 
+enum flash_stat {
+    FLASH_OFF,
+    FLASH_ON,
+};
+
 #define MSM_CAMERA_LED_OFF  0
 #define MSM_CAMERA_LED_LOW  1
 #define MSM_CAMERA_LED_HIGH 2

@@ -25,6 +25,7 @@
 
 #define STROBE 10
 extern int flash_cnt;
+extern int flash_stat;
 struct i2c_client *sx150x_client;
 struct timer_list timer_flash;
 static struct msm_camera_sensor_info *sensor_data;
@@ -417,6 +418,7 @@ error:
 
 	case MSM_CAMERA_LED_LOW:
 		if (sc628a_client || tps61310_client) {
+			flash_stat = FLASH_ON;
 			gpio_set_value_cansleep(external->led_en, 1);
 			gpio_set_value_cansleep(external->led_flash_en, 1);
 			usleep_range(2000, 3000);
@@ -450,6 +452,7 @@ error:
 	case MSM_CAMERA_LED_HIGH:
 		if (sc628a_client || tps61310_client) {
 			//printk(KERN_ERR "flash high\n");
+			flash_stat = FLASH_ON;
 			gpio_set_value_cansleep(external->led_en, 1);
 			gpio_set_value_cansleep(external->led_flash_en, 1);
 			usleep_range(2000, 3000);
