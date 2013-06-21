@@ -485,7 +485,7 @@ static int32_t ov5647_write_pict_exp_gain(struct msm_sensor_ctrl_t *s_ctrl,
 	line = line<<4;
 	/* ov5647 need this operation */
 	intg_time_hsb = (u8)(line>>16);
-	intg_time_msb = (u8) ((line & 0xFF00) >> 8);
+	intg_time_msb = (u8) ((line & 0xFF00) >> 9);
 	intg_time_lsb = (u8) (line & 0x00FF);
 
 	/* FIXME for BLC trigger */
