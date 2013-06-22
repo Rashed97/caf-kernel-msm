@@ -230,10 +230,10 @@ void accsns_activate(int flgatm, int flg)
 {
     u8 buf[2];
 
-    if (atomic_read(&flgSuspend))
-        return;
-
     if (flg != 0) flg = 1;
+
+	if (!atomic_read(&flgEna))
+		accsns_config_regulator(client_accsns, true);
 
     buf[0] = ACC_REG0F    ; buf[1] = 0x03;    /*  g-range +/-2g   */
     accsns_i2c_writem(buf, 2);
@@ -245,6 +245,9 @@ void accsns_activate(int flgatm, int flg)
     accsns_i2c_writem(buf, 2);
     mdelay(2);
     if (flgatm) atomic_set(&flgEna, flg);
+
+	if (!atomic_read(&flgEna))
+		accsns_config_regulator(client_accsns, false);
 }
 
 static void accsns_register_init(void)
@@ -305,15 +308,9 @@ static int accsns_suspend(struct i2c_client *client,pm_message_t mesg)
 #ifdef ALPS_ACC_DEBUG
     printk("[ACC] suspend\n");
 #endif
-    if (atomic_read(&flgSuspend))
-        return 0;
-
+    atomic_set(&flgSuspend, 1);
     accsns_activate(0, 0);
 
-    if (!atomic_read(&flgSuspend))
-        accsns_config_regulator(client_accsns, false);
-
-    atomic_set(&flgSuspend, 1);
     return 0;
 }
 
@@ -322,15 +319,8 @@ static int accsns_resume(struct i2c_client *client)
 #ifdef ALPS_ACC_DEBUG
     printk("[ACC] resume\n");
 #endif
-    if (!atomic_read(&flgSuspend))
-        return 0;
-
-    if (atomic_read(&flgSuspend))
-        accsns_config_regulator(client_accsns, true);
-
-    accsns_activate(0, atomic_read(&flgEna));
-
     atomic_set(&flgSuspend, 0);
+    accsns_activate(0, atomic_read(&flgEna));
 
     return 0;
 }
@@ -429,7 +419,6 @@ static int __init accsns_init(void)
     register_early_suspend(&accsns_early_suspend_handler);
 #endif
 
-    accsns_config_regulator(client_accsns, true);
     accsns_register_init();
 
 #ifdef ALPS_ACC_DEBUG
