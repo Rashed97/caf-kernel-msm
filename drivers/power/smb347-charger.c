@@ -232,7 +232,8 @@ void smb347_charger_vbus_draw(unsigned int mA)
 	const struct smb347_charger_platform_data *pdata = the_chip->pdata;
 	charging_current = mA;
 
-	pr_info("%s Enter charge=%d\n", __FUNCTION__, mA);	
+	pr_info("%s: charging_enabled =%d, Enter charge=%d\n", __FUNCTION__,
+		the_chip->charging_enabled, mA);
 
 	if (mA == IDEV_CHG_MIN){
 		the_chip->charger_type_flags = POWER_SUPPLY_CHARGER_USB;
@@ -254,16 +255,16 @@ void smb347_charger_vbus_draw(unsigned int mA)
 		the_chip->mains_online = 0;
 		the_chip->usb_online = 0;
 		the_chip->charger_type_flags = POWER_SUPPLY_CHARGER_REMOVE;
-                power_supply_set_online(&the_chip->mains, the_chip->mains_online);
-                power_supply_set_online(&the_chip->usb, the_chip->usb_online);
-                power_supply_changed(&the_chip->mains);
-                power_supply_changed(&the_chip->usb);
+		power_supply_set_online(&the_chip->mains, the_chip->mains_online);
+		power_supply_set_online(&the_chip->usb, the_chip->usb_online);
+		power_supply_changed(&the_chip->mains);
+		power_supply_changed(&the_chip->usb);
 		power_supply_changed(&the_chip->battery);
 
 		if ((wakelock_smb_count) && (!mA)) {
 
-		        charge = pm8921_is_usb_chg_plugged_in();
-	               	if (charge == -EINVAL)
+			charge = pm8921_is_usb_chg_plugged_in();
+			if (charge == -EINVAL)
 				charge = 0;
 
 			if((the_chip->is_early_suspend) && (!charge) && (!(the_chip->is_suspend))){
@@ -360,6 +361,11 @@ static int smb347_suspend(bool val)
         	ret &= ~CMD_A_SUSPEND_ENABLED;
 
         ret = smb347_write(the_chip, CMD_A, ret);
+
+	if (!val)
+		smb347_charger_vbus_draw(0);
+	else
+		smb347_charger_vbus_draw(500);
 
 	return 0;
 }
@@ -1264,7 +1270,10 @@ static int smb347_battery_get_property(struct power_supply *psy,
 
 	switch (prop) {
 	case POWER_SUPPLY_PROP_STATUS:
-		if ((charge) && (battery_capacity == 100))
+
+		if (!the_chip->charging_enabled)
+			val->intval = POWER_SUPPLY_STATUS_DISCHARGING;
+		else if ((charge) && (battery_capacity == 100))
 			val->intval = POWER_SUPPLY_STATUS_FULL;
 		else if (charge)
 			val->intval = POWER_SUPPLY_STATUS_CHARGING;
