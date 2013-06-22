@@ -70,6 +70,7 @@ static struct early_suspend hscd_early_suspend_handler;
 static atomic_t flgEna;
 static atomic_t delay;
 static atomic_t flgSuspend;
+struct mutex hscd_active_mutex;
 
 struct sensor_regulator {
     struct regulator *vreg;
@@ -338,6 +339,8 @@ void hscd_activate(int flgatm, int flg, int dtime)
 {
     u8 buf[2];
 
+    mutex_lock(&hscd_active_mutex);
+
     if (flg != 0) flg = 1;
 
 	if (!atomic_read(&flgEna))
@@ -365,6 +368,8 @@ void hscd_activate(int flgatm, int flg, int dtime)
 
 	if (!atomic_read(&flgEna))
 		hscd_config_regulator(client_hscd, false);
+
+    mutex_unlock(&hscd_active_mutex);
 }
 
 static int hscd_register_init(void)
@@ -529,6 +534,7 @@ static int __init hscd_init(void)
     atomic_set(&flgEna, 0);
     atomic_set(&delay, 200);
     atomic_set(&flgSuspend, 0);
+    mutex_init(&hscd_active_mutex);
 
     rc = i2c_add_driver(&hscd_driver);
     if (rc != 0) {

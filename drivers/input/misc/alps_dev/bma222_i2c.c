@@ -59,6 +59,7 @@ static struct early_suspend accsns_early_suspend_handler;
 
 static atomic_t flgEna;
 static atomic_t flgSuspend;
+struct mutex acc_active_mutex;
 
 struct sensor_regulator {
     struct regulator *vreg;
@@ -230,6 +231,7 @@ void accsns_activate(int flgatm, int flg)
 {
     u8 buf[2];
 
+    mutex_lock(&acc_active_mutex);
     if (flg != 0) flg = 1;
 
 	if (!atomic_read(&flgEna))
@@ -248,6 +250,8 @@ void accsns_activate(int flgatm, int flg)
 
 	if (!atomic_read(&flgEna))
 		accsns_config_regulator(client_accsns, false);
+
+    mutex_unlock(&acc_active_mutex);
 }
 
 static void accsns_register_init(void)
@@ -379,6 +383,8 @@ static int __init accsns_init(void)
 #endif
     atomic_set(&flgEna, 0);
     atomic_set(&flgSuspend, 0);
+    mutex_init(&acc_active_mutex);
+
     rc = i2c_add_driver(&accsns_driver);
     if (rc != 0) {
         printk("can't add i2c driver\n");
