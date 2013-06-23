@@ -2180,6 +2180,8 @@ static int smb347_init(struct device *dev)
 
 	smb_init_power(1);
 
+	mdelay(200);
+
 	if (gpio_request(CHG_INOK, "CHG_INOK"))
 		pr_err("%s.failed to get smb347_SYSOK=%d.\n",
 		__FUNCTION__, CHG_INOK);
