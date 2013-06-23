@@ -1339,29 +1339,43 @@ struct mass_storage_function_config {
 static int mass_storage_function_init(struct android_usb_function *f,
 					struct usb_composite_dev *cdev)
 {
-	struct android_dev *dev = cdev_to_android_dev(cdev);
+	//struct android_dev *dev = cdev_to_android_dev(cdev);
 	struct mass_storage_function_config *config;
 	struct fsg_common *common;
 	int err;
 	int i;
-	const char *name[2];
+	const char *name[3];
 
 	config = kzalloc(sizeof(struct mass_storage_function_config),
 								GFP_KERNEL);
 	if (!config)
 		return -ENOMEM;
 
-	config->fsg.nluns = 1;
-	name[0] = "lun";
-	if (dev->pdata && dev->pdata->cdrom) {
-		config->fsg.nluns = 2;
-		config->fsg.luns[1].cdrom = 1;
-		config->fsg.luns[1].ro = 1;
-		config->fsg.luns[1].removable = 0;
-		name[1] = "lun0";
-	}
+	config->fsg.nluns = 3;
 
-	config->fsg.luns[0].removable = 1;
+	for (i = 0; i < config->fsg.nluns; i++) {
+            config->fsg.luns[i].removable = 1;
+            config->fsg.luns[i].nofua = 1;
+  }
+
+	config->fsg.luns[0].cdrom = 0;
+  name[0] = "lun0";
+  config->fsg.luns[1].cdrom = 0;
+  name[1] = "lun1";
+  config->fsg.luns[2].cdrom = 1;
+  config->fsg.luns[2].ro = 1;
+  name[2] = "lun2";
+
+//name[0] = "lun";
+//	if (dev->pdata && dev->pdata->cdrom) {
+//		config->fsg.nluns = 2;
+//		config->fsg.luns[1].cdrom = 1;
+//		config->fsg.luns[1].ro = 1;
+//		config->fsg.luns[1].removable = 0;
+//		name[1] = "lun0";
+//	}
+//	config->fsg.luns[0].removable = 1;
+
 
 	common = fsg_common_init(NULL, cdev, &config->fsg);
 	if (IS_ERR(common)) {
