@@ -267,7 +267,8 @@ void smb347_charger_vbus_draw(unsigned int mA)
 			if (charge == -EINVAL)
 				charge = 0;
 
-			if((the_chip->is_early_suspend) && (!charge) && (!(the_chip->is_suspend))){
+			if(((the_chip->is_early_suspend) && (!charge) && (!(the_chip->is_suspend)))
+				|| (!the_chip->charging_enabled)){
 				pdata->enable_power(0);
 				the_chip->is_suspend = true;
 				pr_info("power off smb347\n");
