@@ -73,7 +73,7 @@ static struct early_suspend alps_early_suspend_handler;
 
 static int flgActivate = ACTIVE_SS_NUL;
 static int flgSuspend = 0;
-static int delay = 100;
+static int delay = 2000;
 static int poll_stop_cnt = 0;
 static struct TAIFD_HW_DATA sns_hw_data;
 static struct TAIFD_SW_DATA sns_sw_data;
