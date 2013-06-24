@@ -363,10 +363,8 @@ static int smb347_suspend(bool val)
 
         ret = smb347_write(the_chip, CMD_A, ret);
 
-	if (!val)
+	if ((!val) && (!the_chip->charging_enabled))
 		smb347_charger_vbus_draw(0);
-	else
-		smb347_charger_vbus_draw(500);
 
 	return 0;
 }
