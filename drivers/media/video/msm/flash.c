@@ -430,7 +430,7 @@ error:
 				i2c_client.client = sc628a_client;
 				i2c_client.addr_type = MSM_CAMERA_I2C_BYTE_ADDR;
 				rc = msm_camera_i2c_write(&i2c_client, 0x02,
-					0x95, MSM_CAMERA_I2C_BYTE_DATA);//675mA
+					0x06, MSM_CAMERA_I2C_BYTE_DATA);//
 				}
 				else{
 				//printk(KERN_ERR "flash torch\n");
