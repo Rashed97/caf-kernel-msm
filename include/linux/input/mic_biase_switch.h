@@ -9,6 +9,8 @@
 #define US_HEADSET_DETECT_VLAUE 800
 
 void mic_biase_switch_set_enable(int switch_enable);
+void get_headphone_state(int hs_insert);
+
 
 struct mic_biase_switch_platform_data {
     int gpio_switch;

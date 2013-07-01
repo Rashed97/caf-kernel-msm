@@ -18,6 +18,7 @@
 struct regulator *regulator_l17;
 struct mic_biase_switch_platform_data *mic_data;
 int enable_state;
+int insert;
 void mic_biase_switch_set_enable(int enable)
 {
     static int switch_enable = MIC_BIASE_SWITCH_L;
@@ -29,9 +30,15 @@ void mic_biase_switch_set_enable(int enable)
     enable_state = switch_enable;
 }
 
+void get_headphone_state(int hs_insert)
+{
+    insert = hs_insert;
+}
+
 int mic_biase_switch_suspend(struct platform_device *pdev, pm_message_t state)
 {
-    regulator_disable(regulator_l17);
+    if (!insert)
+        regulator_disable(regulator_l17);
     msleep(10);
     return 0;
 }

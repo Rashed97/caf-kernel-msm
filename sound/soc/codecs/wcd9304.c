@@ -4292,6 +4292,7 @@ static void sitar_codec_decide_gpio_plug(struct snd_soc_codec *codec)
 	}
 
     mic_mv_arvg = mic_mv_total / (MBHC_NUM_DCE_PLUG_DETECT - 1);
+    get_headphone_state(1);
     if(mic_mv_arvg < US_HEADSET_DETECT_VLAUE && mic_mv_arvg > HEADPHONE_DETECT_VALUE) {
         mic_biase_switch_set_enable(MIC_BIASE_SWITCH_INV);
     }
@@ -4388,6 +4389,7 @@ static void sitar_hs_gpio_handler(struct snd_soc_codec *codec)
 			sitar_codec_report_plug(codec, 0, SND_JACK_HEADSET);
 			is_removed = true;
 		}
+        get_headphone_state(0);
 
 		if (is_removed) {
 			/* Enable Mic Bias pull down and HPH Switch to GND */
