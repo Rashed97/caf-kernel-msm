@@ -479,9 +479,17 @@ static int32_t ov5647_write_pict_exp_gain(struct msm_sensor_ctrl_t *s_ctrl,
 
 	line = line<<4;
 	/* ov5647 need this operation */
-	intg_time_hsb = (u8) (0);
-	intg_time_msb = (u8) ((line & 0xFF00) >> 8);
-	intg_time_lsb = (u8) (line & 0x00FF);
+	if ((line>>16)>0x10)
+	{
+		intg_time_hsb = 0x0F;
+		intg_time_msb = 0xFF;
+		intg_time_lsb = 0xFF;
+	}
+	else {
+		intg_time_hsb = (u8) (line >> 16);
+		intg_time_msb = (u8) ((line & 0xFF00) >> 8);
+		intg_time_lsb = (u8) (line & 0x00FF);
+	}
 
 	/* FIXME for BLC trigger */
 	/* Coarse Integration Time */
@@ -555,11 +563,18 @@ static int32_t ov5647_write_prev_exp_gain(struct msm_sensor_ctrl_t *s_ctrl,
 
 	line = line<<4;
 	/* ov5647 need this operation */
-	intg_time_hsb = (u8) (line >> 16);
-	intg_time_msb = (u8) ((line & 0xFF00) >> 8);
-	intg_time_lsb = (u8) (line & 0x00FF);
 
-
+	if ((line>>16)>0x10)
+	{
+		intg_time_hsb = 0x0F;
+		intg_time_msb = 0xFF;
+		intg_time_lsb = 0xFF;
+	}
+	else {
+		intg_time_hsb = (u8) (line >> 16);
+		intg_time_msb = (u8) ((line & 0xFF00) >> 8);
+		intg_time_lsb = (u8) (line & 0x00FF);
+	}
 	/* Coarse Integration Time */
 	msm_camera_i2c_write(s_ctrl->sensor_i2c_client,
 		s_ctrl->sensor_exp_gain_info->coarse_int_time_addr,
