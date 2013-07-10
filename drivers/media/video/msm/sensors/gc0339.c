@@ -420,8 +420,8 @@ static struct msm_sensor_id_info_t gc0339_id_info = {
 };
 
 static struct msm_sensor_exp_gain_info_t gc0339_exp_gain_info = {
-	.coarse_int_time_addr = 0x03,
-	.global_gain_addr = 0x51,
+	.coarse_int_time_addr = 0x51,
+	.global_gain_addr = 0x03,
 	.vert_offset = 4,
 };
 
@@ -435,18 +435,18 @@ static int32_t gc0339_write_exp_gain(struct msm_sensor_ctrl_t *s_ctrl,
 		uint16_t gain, uint32_t line)
 {
  int rc = 0;
+  unsigned int  intg_time_msb, intg_time_lsb;
   CDBG("gc0339_write_prev_exp_gain,gain=%d, line=%d\n",gain,line);
+  intg_time_msb = (unsigned int ) ((line & 0x0F00) >> 8);
+  intg_time_lsb = (unsigned int ) (line& 0x00FF);
   if(gain>0xff)
     gain=0xff;
   msm_camera_i2c_write(s_ctrl->sensor_i2c_client,
-    s_ctrl->sensor_exp_gain_info->global_gain_addr,
-	gain,MSM_CAMERA_I2C_BYTE_DATA);
+    0x51,(gain),MSM_CAMERA_I2C_BYTE_DATA);
   msm_camera_i2c_write(s_ctrl->sensor_i2c_client,
-    s_ctrl->sensor_exp_gain_info->coarse_int_time_addr,
-	0x08,MSM_CAMERA_I2C_BYTE_DATA);
+    0x03,(intg_time_msb),MSM_CAMERA_I2C_BYTE_DATA);
   msm_camera_i2c_write(s_ctrl->sensor_i2c_client,
-    s_ctrl->sensor_exp_gain_info->coarse_int_time_addr+1,
-	0x96,MSM_CAMERA_I2C_BYTE_DATA);
+    0x04,(intg_time_lsb),MSM_CAMERA_I2C_BYTE_DATA);
   return rc;
 }
 
