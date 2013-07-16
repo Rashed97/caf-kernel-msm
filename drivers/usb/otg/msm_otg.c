@@ -1158,7 +1158,7 @@ static void msm_otg_notify_charger(struct msm_otg *motg, unsigned mA)
 	if (msm_otg_notify_power_supply(motg, mA))
 		pm8921_charger_vbus_draw(mA);
 #else
-		smb347_charger_vbus_draw(mA);
+		smb347_charger_vbus_draw(mA, motg->chg_type);
 #endif
 
 	motg->cur_power = mA;

@@ -226,14 +226,14 @@ static bool wakelock_smb_count;
 static unsigned int charging_current;
 
 /* USB calls these to tell us how much max usb current the system can draw */
-void smb347_charger_vbus_draw(unsigned int mA)
+void smb347_charger_vbus_draw(unsigned int mA, enum usb_chg_type chg_type)
 {
 	bool charge     = false;
 	const struct smb347_charger_platform_data *pdata = the_chip->pdata;
 	charging_current = mA;
 
-	pr_info("%s: charging_enabled =%d, Enter charge=%d\n", __FUNCTION__,
-		the_chip->charging_enabled, mA);
+	pr_info("%s: charging_enabled =%d, Enter charge=%d, chg_type =%d\n", __FUNCTION__,
+		the_chip->charging_enabled, mA, chg_type);
 
 	if (mA == IDEV_CHG_MIN){
 		the_chip->charger_type_flags = POWER_SUPPLY_CHARGER_USB;
@@ -244,10 +244,18 @@ void smb347_charger_vbus_draw(unsigned int mA)
 		wake_lock(&smb_lock);
 	}
 	else if (mA == IDEV_CHG_MAX){
-		the_chip->charger_type_flags = POWER_SUPPLY_CHARGER_AC;
-		the_chip->mains_online = 1;
-		power_supply_set_online(&the_chip->mains, the_chip->mains_online);
-		power_supply_changed(&the_chip->mains);
+		if ((chg_type == USB_CDP_CHARGER) || (chg_type == USB_PROPRIETARY_CHARGER)){
+			the_chip->charger_type_flags = POWER_SUPPLY_CHARGER_CDP;
+			the_chip->usb_online = 1;
+			power_supply_set_online(&the_chip->usb, the_chip->usb_online);
+			power_supply_changed(&the_chip->usb);
+		}
+		else{
+			the_chip->charger_type_flags = POWER_SUPPLY_CHARGER_AC;
+			the_chip->mains_online = 1;
+			power_supply_set_online(&the_chip->mains, the_chip->mains_online);
+			power_supply_changed(&the_chip->mains);
+		}
 		wakelock_smb_count = true;
 		wake_lock(&smb_lock);
 	}
@@ -364,7 +372,7 @@ static int smb347_suspend(bool val)
         ret = smb347_write(the_chip, CMD_A, ret);
 
 	if ((!val) && (!the_chip->charging_enabled))
-		smb347_charger_vbus_draw(0);
+		smb347_charger_vbus_draw(0,0);
 
 	return 0;
 }
@@ -432,13 +440,21 @@ void update_charger_type(struct smb347_charger *smb)
 		cmd_ret |= CMD_B_HC_ENABLE;
 	}
 	else if(smb->usb_online){
-		cfg_ret |= CFG_PIN_EN_CTRL_USB_HC;
-		cfg_ret |= CFG_PIN_EN_CTRL_ACTIVE_LOW;
-		cmd_ret &= ~CMD_B_HC_ENABLE;
 
-		if (charging_gpio == false){
-			pdata->enable_charging(1);
-			charging_gpio = true;
+		if (smb->charger_type_flags == POWER_SUPPLY_CHARGER_CDP){
+			cfg_ret &= ~CFG_PIN_EN_CTRL_USB_HC;
+			cfg_ret |= CFG_REG_EN;
+			cmd_ret |= CMD_B_HC_ENABLE;
+		}
+		else{
+			cfg_ret |= CFG_PIN_EN_CTRL_USB_HC;
+			cfg_ret |= CFG_PIN_EN_CTRL_ACTIVE_LOW;
+			cmd_ret &= ~CMD_B_HC_ENABLE;
+	
+			if (charging_gpio == false){
+				pdata->enable_charging(1);
+				charging_gpio = true;
+			}
 		}
 	}
 	else{

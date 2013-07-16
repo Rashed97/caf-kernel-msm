@@ -16,6 +16,7 @@
 
 #include <linux/types.h>
 #include <linux/power_supply.h>
+#include <linux/usb/msm_hsusb.h>
 
 #define IDEV_CHG_MAX	1500
 #define IDEV_CHG_MIN	500
@@ -32,12 +33,13 @@ extern int battery_capacity;
 extern int battery_temperature;
 extern bool power_off_charging;
 
-void smb347_charger_vbus_draw(unsigned int mA);
+void smb347_charger_vbus_draw(unsigned int mA, enum usb_chg_type chg_type);
 
 enum {
 	POWER_SUPPLY_CHARGER_REMOVE = 0,
 	POWER_SUPPLY_CHARGER_USB,
 	POWER_SUPPLY_CHARGER_AC,
+	POWER_SUPPLY_CHARGER_CDP,
 };
 
 enum {
