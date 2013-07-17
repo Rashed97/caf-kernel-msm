@@ -215,7 +215,7 @@ static void msm_restart_prepare(const char *cmd)
 
 	pm8xxx_reset_pwr_off(1);
 
-	//if (cmd != NULL) {
+	if (cmd != NULL) {
 		if (!strncmp(cmd, "bootloader", 10)) {
 			__raw_writel(0x77665500, restart_reason);
 		} else if (!strncmp(cmd, "recovery", 8)) {
@@ -227,7 +227,10 @@ static void msm_restart_prepare(const char *cmd)
 		} else {
 			__raw_writel(0x77665501, restart_reason);
 		}
-	//}
+	}
+	else {
+		__raw_writel(0x77665501, restart_reason);
+	}
 }
 
 void msm_restart(char mode, const char *cmd)
