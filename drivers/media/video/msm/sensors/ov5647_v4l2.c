@@ -477,7 +477,7 @@ static int32_t ov5647_write_pict_exp_gain(struct msm_sensor_ctrl_t *s_ctrl,
 			max_line = 1968;
 	}
 
-	line = line<<4;
+	line = line<<3;
 	/* ov5647 need this operation */
 	if ((line>>16)>0x10)
 	{
