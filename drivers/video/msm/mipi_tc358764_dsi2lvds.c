@@ -638,7 +638,7 @@ static int mipi_d2l_lcd_on(struct platform_device *pdev)
 
 	mipi_d2l_read_status(mfd);
 
-	mipi_d2l_enable_3d(mfd, false, false);
+	//mipi_d2l_enable_3d(mfd, false, false);
 
 	/* Add I2C driver only after DSI-CLK is running */
 	if (d2l_i2c_client == NULL)
