@@ -44,7 +44,8 @@ static DEFINE_MUTEX(alps_lock);
 static DECLARE_WAIT_QUEUE_HEAD(data_ready_wq);
 
 static struct platform_device *pdev;
-static struct input_polled_dev *alps_idev;
+static struct input_dev *alps_idev;
+static struct delayed_work alps_work;
 #ifdef CONFIG_HAS_EARLYSUSPEND
 static struct early_suspend alps_early_suspend_handler;
 #endif
@@ -484,6 +485,7 @@ static void alps_early_resume(struct early_suspend *handler)
     mutex_lock(&alps_lock);
     poll_stop_cnt = POLL_STOP_TIME / delay;
     flgSuspend = 0;
+    schedule_delayed_work(&alps_work, msecs_to_jiffies(delay));
     mutex_unlock(&alps_lock);
 }
 #endif
@@ -524,12 +526,11 @@ static void hscd_poll(struct input_dev *idev)
     }
 }
 
-static void alps_poll(struct input_polled_dev *dev)
+static void alps_poll(struct work_struct *work)
 {
-    struct input_dev *idev = dev->input;
+    struct input_dev *idev = alps_idev;
 
     mutex_lock(&alps_lock);
-    dev->poll_interval = delay;
     if (!flgSuspend) {
         if (poll_stop_cnt-- < 0) {
             poll_stop_cnt = -1;
@@ -546,6 +547,8 @@ static void alps_poll(struct input_polled_dev *dev)
 #ifdef ALPS_DEBUG
         else printk("polling stop. delay = %d, poll_stop_cnt = %d\n", delay, poll_stop_cnt);
 #endif
+
+        schedule_delayed_work(&alps_work, msecs_to_jiffies(delay));
     }
     mutex_unlock(&alps_lock);
 }
@@ -555,28 +558,28 @@ static void report_value(void)
     if (!flgSuspend) {
         if (poll_stop_cnt < 0) {
             if ((flgActivate & ACTIVE_SS_ACC) && sns_sw_data.acc[0]) {
-                input_report_abs(alps_idev->input, EVENT_TYPE_ACCEL_X      , sns_sw_data.acc[1]);
-                input_report_abs(alps_idev->input, EVENT_TYPE_ACCEL_Y      , sns_sw_data.acc[2]);
-                input_report_abs(alps_idev->input, EVENT_TYPE_ACCEL_Z      , sns_sw_data.acc[3]);
-                input_report_abs(alps_idev->input, EVENT_TYPE_ACCEL_STATUS , sns_sw_data.acc[4]);
-                alps_idev->input->sync = 0;
-                input_event(alps_idev->input, EV_SYN, SYN_REPORT, 1);
+                input_report_abs(alps_idev, EVENT_TYPE_ACCEL_X      , sns_sw_data.acc[1]);
+                input_report_abs(alps_idev, EVENT_TYPE_ACCEL_Y      , sns_sw_data.acc[2]);
+                input_report_abs(alps_idev, EVENT_TYPE_ACCEL_Z      , sns_sw_data.acc[3]);
+                input_report_abs(alps_idev, EVENT_TYPE_ACCEL_STATUS , sns_sw_data.acc[4]);
+                alps_idev->sync = 0;
+                input_event(alps_idev, EV_SYN, SYN_REPORT, 1);
             }
             if ((flgActivate & ACTIVE_SS_MAG) && sns_sw_data.mag[0]) {
-                input_report_abs(alps_idev->input, EVENT_TYPE_MAGV_X       , sns_sw_data.mag[1]);
-                input_report_abs(alps_idev->input, EVENT_TYPE_MAGV_Y       , sns_sw_data.mag[2]);
-                input_report_abs(alps_idev->input, EVENT_TYPE_MAGV_Z       , sns_sw_data.mag[3]);
-                input_report_abs(alps_idev->input, EVENT_TYPE_MAGV_STATUS  , sns_sw_data.mag[4]);
-                alps_idev->input->sync = 0;
-                input_event(alps_idev->input, EV_SYN, SYN_REPORT, 2);
+                input_report_abs(alps_idev, EVENT_TYPE_MAGV_X       , sns_sw_data.mag[1]);
+                input_report_abs(alps_idev, EVENT_TYPE_MAGV_Y       , sns_sw_data.mag[2]);
+                input_report_abs(alps_idev, EVENT_TYPE_MAGV_Z       , sns_sw_data.mag[3]);
+                input_report_abs(alps_idev, EVENT_TYPE_MAGV_STATUS  , sns_sw_data.mag[4]);
+                alps_idev->sync = 0;
+                input_event(alps_idev, EV_SYN, SYN_REPORT, 2);
             }
             if ((flgActivate & ACTIVE_SS_ORI) && sns_sw_data.ori[0]) {
-                input_report_abs(alps_idev->input, EVENT_TYPE_YAW          , sns_sw_data.ori[1]);
-                input_report_abs(alps_idev->input, EVENT_TYPE_PITCH        , sns_sw_data.ori[2]);
-                input_report_abs(alps_idev->input, EVENT_TYPE_ROLL         , sns_sw_data.ori[3]);
-                input_report_abs(alps_idev->input, EVENT_TYPE_ORIENT_STATUS, sns_sw_data.ori[4]);
-                alps_idev->input->sync = 0;
-                input_event(alps_idev->input, EV_SYN, SYN_REPORT, 3);
+                input_report_abs(alps_idev, EVENT_TYPE_YAW          , sns_sw_data.ori[1]);
+                input_report_abs(alps_idev, EVENT_TYPE_PITCH        , sns_sw_data.ori[2]);
+                input_report_abs(alps_idev, EVENT_TYPE_ROLL         , sns_sw_data.ori[3]);
+                input_report_abs(alps_idev, EVENT_TYPE_ORIENT_STATUS, sns_sw_data.ori[4]);
+                alps_idev->sync = 0;
+                input_event(alps_idev, EV_SYN, SYN_REPORT, 3);
             }
         }
     }
@@ -600,18 +603,15 @@ static int __init alps_init(void)
     }
     printk(KERN_INFO "alps-init: platform_device_register_simple\n");
 
-    alps_idev = input_allocate_polled_device();
+    alps_idev = input_allocate_device();
     if (!alps_idev) {
         ret = -ENOMEM;
         goto out_device;
     }
     printk(KERN_INFO "alps-init: input_allocate_polled_device\n");
 
-    alps_idev->poll = alps_poll;
-    alps_idev->poll_interval = ALPS_POLL_INTERVAL;
-
     /* initialize the input class */
-    idev = alps_idev->input;
+    idev = alps_idev;
     idev->name = "alps_compass";
     idev->phys = "alps_compass/input0";
     idev->id.bustype = BUS_HOST;
@@ -646,7 +646,7 @@ static int __init alps_init(void)
     input_set_abs_params(idev, EVENT_TYPE_ORIENT_STATUS,
                 0,    3, ALPS_INPUT_FUZZ, ALPS_INPUT_FLAT);
 
-    ret = input_register_polled_device(alps_idev);
+    ret = input_register_device(alps_idev);
     if (ret)
         goto out_alc_poll;
     printk(KERN_INFO "alps-init: input_register_polled_device\n");
@@ -665,7 +665,7 @@ static int __init alps_init(void)
     }
     printk("alps-init: alps_as_device misc_register\n");
 
-    ret = sysfs_create_group(&alps_idev->input->dev.kobj, &hscd_attribute_group);
+    ret = sysfs_create_group(&alps_idev->dev.kobj, &hscd_attribute_group);
     if (ret)
         goto out_misc_ad;
     printk(KERN_INFO "alps-init: sysfs_create_group\n");
@@ -681,6 +681,9 @@ static int __init alps_init(void)
     memset(&sns_sw_data, 0, sizeof sns_sw_data);
     mutex_unlock(&alps_lock);
     init_waitqueue_head(&data_ready_wq);
+    INIT_DELAYED_WORK(&alps_work, alps_poll);
+
+    schedule_delayed_work(&alps_work, msecs_to_jiffies(delay));
 
     return 0;
 
@@ -691,10 +694,10 @@ out_misc_ss:
     misc_deregister(&alps_ss_device);
     printk(KERN_INFO "alps-init: input_unregister_polled_device(alps_ss_device)\n");
 out_reg_poll:
-    input_unregister_polled_device(alps_idev);
+    input_unregister_device(alps_idev);
     printk(KERN_INFO "alps-init: input_unregister_polled_device\n");
 out_alc_poll:
-    input_free_polled_device(alps_idev);
+    input_free_device(alps_idev);
     printk(KERN_INFO "alps-init: input_free_polled_device\n");
 out_device:
     platform_device_unregister(pdev);
@@ -708,15 +711,15 @@ out_region:
 
 static void __exit alps_exit(void)
 {
-    sysfs_remove_group(&alps_idev->input->dev.kobj, &hscd_attribute_group);
+    sysfs_remove_group(&alps_idev->dev.kobj, &hscd_attribute_group);
     printk(KERN_INFO "alps-exit: sysfs_remove_group\n");
     misc_deregister(&alps_ad_device);
     printk(KERN_INFO "alps-exit: alps_ad_device misc_deregister\n");
     misc_deregister(&alps_ss_device);
     printk(KERN_INFO "alps-exit: alps_ss_device misc_deregister\n");
-    input_unregister_polled_device(alps_idev);
+    input_unregister_device(alps_idev);
     printk(KERN_INFO "alps-exit: input_unregister_polled_device\n");
-    input_free_polled_device(alps_idev);
+    input_free_device(alps_idev);
     printk(KERN_INFO "alps-exit: input_free_polled_device\n");
     platform_device_unregister(pdev);
     printk(KERN_INFO "alps-exit: platform_device_unregister\n");
