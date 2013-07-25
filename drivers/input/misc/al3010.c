@@ -300,11 +300,19 @@ static int al3010_set_ahthres(struct i2c_client *client, int val)
 /* power_state */
 static int al3010_get_adc_value(struct i2c_client *client)
 {
+	struct al3010_data *data = i2c_get_clientdata(client);
 	int lsb, msb, val;
 
+	mutex_lock(&data->lock);
 	lsb = i2c_smbus_read_byte_data(client, AL3010_ADC_LSB);
 
+	if (lsb < 0) {
+		mutex_unlock(&data->lock);
+		return lsb;
+	}
+
 	msb = i2c_smbus_read_byte_data(client, AL3010_ADC_MSB);
+	mutex_unlock(&data->lock);
 
 	if (msb < 0)
 		return msb;
@@ -341,18 +349,11 @@ static void al3010_updata_value(struct al3010_data *data)
 
 static void al3010_work_func(struct work_struct *work)
 {
-	struct al3010_data *data;
-	unsigned long delay;
-
-	printk("%s start\n", __func__);
-
-	data = container_of((struct delayed_work *)work,struct al3010_data, work);
-	delay = msecs_to_jiffies(atomic_read(&data->delay));
-
+	struct al3010_data *data = container_of((struct delayed_work *)work,struct al3010_data, work);
+	unsigned long delay = msecs_to_jiffies(atomic_read(&data->delay));	
+	
 	al3010_updata_value(data);
 	schedule_delayed_work(&data->work, delay);
-
-	printk("%s end\n", __func__);
 }
 
 /*
