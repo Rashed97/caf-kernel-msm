@@ -318,8 +318,6 @@ static int mipi_dsi_cdp_panel_power(int on)
 				return -1;
 			}
 			gpio_direction_output(VPH_PWR_EN, 0);
-			usleep(500000);
-			gpio_direction_output(VPH_PWR_EN, 1);
 		}
 		rc = gpio_request(BACKLIGHT_EN, "backlight_en");
 		if (rc) {
