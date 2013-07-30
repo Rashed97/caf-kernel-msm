@@ -56,6 +56,7 @@ struct isa1200_chip {
 	bool clk_on;
 	u8 hctrl0_val;
 	struct clk *pwm_clk;
+	bool is_early_suspend;
 #ifdef CONFIG_HAS_EARLYSUSPEND
 	struct	early_suspend early_suspend;
 #endif
@@ -64,6 +65,9 @@ struct isa1200_chip {
 static int isa1200_read_reg(struct i2c_client *client, int reg)
 {
 	int ret;
+
+	if (this_chip->is_early_suspend)
+		return 0;
 
 	ret = i2c_smbus_read_byte_data(client, reg);
 	if (ret < 0)
@@ -75,6 +79,9 @@ static int isa1200_read_reg(struct i2c_client *client, int reg)
 static int isa1200_write_reg(struct i2c_client *client, int reg, u8 value)
 {
 	int ret;
+
+	if (this_chip->is_early_suspend)
+		return 0;
 
 	ret = i2c_smbus_write_byte_data(client, reg, value);
 	if (ret < 0)
@@ -453,6 +460,8 @@ void isa1200_suspend(struct early_suspend *h)
 	struct isa1200_chip *haptic = this_chip;
 	int ret;
 
+	haptic->is_early_suspend = true;
+
 	hrtimer_cancel(&haptic->timer);
 	cancel_work_sync(&haptic->work);
 	/* turn-off current vibration */
@@ -480,6 +489,8 @@ void isa1200_resume(struct early_suspend *h)
 {
 	struct isa1200_chip *haptic = this_chip;
 	int ret;
+
+	haptic->is_early_suspend = false;
 
 	if (haptic->pdata->regulator_info)
 		isa1200_reg_power(haptic, true);
