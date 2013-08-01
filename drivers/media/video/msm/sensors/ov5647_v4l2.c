@@ -311,6 +311,10 @@ static struct msm_camera_i2c_reg_conf ov5647_recommend_settings[] = {
 	{0x583d, 0xce},
 	/* manual AWB,manual AE,close Lenc,open WBC*/
 	{0x3503, 0x03}, /*manual AE*/
+	{0x3501, 0x10},
+	{0x3502, 0x80},
+	{0x350a, 0x00},
+	{0x350b, 0x7f},
 	{0x5001, 0x01}, /*manual AWB*/
 	{0x5180, 0x08},
 	{0x5186, 0x04},
@@ -456,7 +460,7 @@ static int32_t ov5647_write_pict_exp_gain(struct msm_sensor_ctrl_t *s_ctrl,
 	if (line > 1964) {
 		msm_camera_i2c_write(s_ctrl->sensor_i2c_client,
 			s_ctrl->sensor_output_reg_addr->frame_length_lines,
-			(uint8_t)(((line+4) & 0xFF00)>> 8),
+			(uint8_t)((line+4) >> 8),
 			MSM_CAMERA_I2C_BYTE_DATA);
 
 		msm_camera_i2c_write(s_ctrl->sensor_i2c_client,
@@ -477,21 +481,42 @@ static int32_t ov5647_write_pict_exp_gain(struct msm_sensor_ctrl_t *s_ctrl,
 			max_line = 1968;
 	}
 
-	line = line<<3;
+
+	line = line<<4;
 	/* ov5647 need this operation */
-	if ((line>>16)>0x10)
-	{
-		intg_time_hsb = 0x0F;
-		intg_time_msb = 0xFF;
-		intg_time_lsb = 0xFF;
-	}
-	else {
-		intg_time_hsb = (u8) (line >> 16);
-		intg_time_msb = (u8) ((line & 0xFF00) >> 8);
-		intg_time_lsb = (u8) (line & 0x00FF);
-	}
+	intg_time_hsb = (u8)(line>>16);
+	intg_time_msb = (u8) ((line & 0xFF00) >> 8);
+	intg_time_lsb = (u8) (line & 0x00FF);
 
 	/* FIXME for BLC trigger */
+	/* Coarse Integration Time */
+	msm_camera_i2c_write(s_ctrl->sensor_i2c_client,
+		s_ctrl->sensor_exp_gain_info->coarse_int_time_addr,
+		intg_time_hsb,
+		MSM_CAMERA_I2C_BYTE_DATA);
+
+	msm_camera_i2c_write(s_ctrl->sensor_i2c_client,
+		s_ctrl->sensor_exp_gain_info->coarse_int_time_addr + 1,
+		intg_time_msb,
+		MSM_CAMERA_I2C_BYTE_DATA);
+
+	msm_camera_i2c_write(s_ctrl->sensor_i2c_client,
+		s_ctrl->sensor_exp_gain_info->coarse_int_time_addr + 2,
+		intg_time_lsb,
+		MSM_CAMERA_I2C_BYTE_DATA);
+
+	/* gain */
+
+	msm_camera_i2c_write(s_ctrl->sensor_i2c_client,
+		s_ctrl->sensor_exp_gain_info->global_gain_addr,
+		gain_hsb,
+		MSM_CAMERA_I2C_BYTE_DATA);
+
+	msm_camera_i2c_write(s_ctrl->sensor_i2c_client,
+		s_ctrl->sensor_exp_gain_info->global_gain_addr + 1,
+		gain_lsb^0x1,
+		MSM_CAMERA_I2C_BYTE_DATA);
+
 	/* Coarse Integration Time */
 	msm_camera_i2c_write(s_ctrl->sensor_i2c_client,
 		s_ctrl->sensor_exp_gain_info->coarse_int_time_addr,
@@ -547,7 +572,7 @@ static int32_t ov5647_write_prev_exp_gain(struct msm_sensor_ctrl_t *s_ctrl,
 	s_ctrl->func_tbl->sensor_group_hold_on(s_ctrl);
 
 	/* adjust frame rate */
-	if ((s_ctrl->curr_res < MSM_SENSOR_RES_2) &&
+	if ((s_ctrl->curr_res < MSM_SENSOR_RES_FULL) &&
 		(line > (fl_lines - offset)))
 		fl_lines = line + offset;
 
@@ -563,18 +588,11 @@ static int32_t ov5647_write_prev_exp_gain(struct msm_sensor_ctrl_t *s_ctrl,
 
 	line = line<<4;
 	/* ov5647 need this operation */
+	intg_time_hsb = (u8)(line>>16);
+	intg_time_msb = (u8) ((line & 0xFF00) >> 8);
+	intg_time_lsb = (u8) (line & 0x00FF);
 
-	if ((line>>16)>0x10)
-	{
-		intg_time_hsb = 0x0F;
-		intg_time_msb = 0xFF;
-		intg_time_lsb = 0xFF;
-	}
-	else {
-		intg_time_hsb = (u8) (line >> 16);
-		intg_time_msb = (u8) ((line & 0xFF00) >> 8);
-		intg_time_lsb = (u8) (line & 0x00FF);
-	}
+
 	/* Coarse Integration Time */
 	msm_camera_i2c_write(s_ctrl->sensor_i2c_client,
 		s_ctrl->sensor_exp_gain_info->coarse_int_time_addr,
