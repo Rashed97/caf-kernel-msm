@@ -194,6 +194,9 @@ static u32 d2l_pwm_freq_hz = (1 * 1000);
 #define PWM_FREQ_HZ	(d2l_pwm_freq_hz)
 #define PWM_PERIOD_USEC (USEC_PER_SEC / PWM_FREQ_HZ)
 #define PWM_DUTY_LEVEL_TO_PERIOD_USEC(x) (x * PWM_PERIOD_USEC / PWM_LEVEL)
+#define MAX_BACKLIGHT_LEVEL	255
+#define PWM_OFFSET_WEIGHT	5
+#define PWM_OFFSET_COMPENSATE
 
 #define CMD_DELAY 100
 #define DSI_MAX_LANES 4
@@ -528,6 +531,9 @@ static int mipi_d2l_dsi_init_sequence(struct msm_fb_data_type *mfd)
 static int mipi_d2l_set_backlight_level(struct pwm_device *pwm, int level)
 {
 	int ret = 0;
+#ifdef PWM_OFFSET_COMPENSATE
+	int pwm_offset_us;
+#endif
 
 	pr_debug("%s: level=%d.\n", __func__, level);
 
@@ -536,7 +542,24 @@ static int mipi_d2l_set_backlight_level(struct pwm_device *pwm, int level)
 		return -EINVAL;
 	}
 
+#ifndef PWM_OFFSET_COMPENSATE
 	ret = pwm_config(pwm, PWM_DUTY_LEVEL_TO_PERIOD_USEC(level), PWM_PERIOD_USEC);
+#else
+	if (machine_is_msm8x30_type1()){
+		if (level > 0)
+			pwm_offset_us = ((MAX_BACKLIGHT_LEVEL - level) /PWM_OFFSET_WEIGHT);
+		else
+			pwm_offset_us = 0;
+	
+		ret = pwm_config(pwm, PWM_DUTY_LEVEL_TO_PERIOD_USEC(level) + pwm_offset_us, PWM_PERIOD_USEC);
+		pr_debug("Backlight level=%d, PERIIOD_USEC=%ld\n", level, PWM_DUTY_LEVEL_TO_PERIOD_USEC(level) + pwm_offset_us);
+	}
+	else{
+		ret = pwm_config(pwm, PWM_DUTY_LEVEL_TO_PERIOD_USEC(level), PWM_PERIOD_USEC);
+		pr_debug("Backlight level=%d, PERIIOD_USEC=%ld\n", level, PWM_DUTY_LEVEL_TO_PERIOD_USEC(level));
+	}
+#endif
+
 	if (ret) {
 		pr_err("%s: pwm_config() failed err=%d.\n", __func__, ret);
 		return ret;
