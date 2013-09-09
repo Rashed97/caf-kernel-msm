@@ -956,7 +956,6 @@ static int hci_fm_rds_grp_process_req(struct radio_hci_dev *hdev,
 	__u16 opcode = 0;
 
 	__u32 fm_grps_process = param;
-
 	opcode = hci_opcode_pack(HCI_OGF_FM_RECV_CTRL_CMD_REQ,
 		HCI_OCF_FM_RDS_GRP_PROCESS);
 	return radio_hci_send_cmd(hdev, opcode, sizeof(fm_grps_process),
@@ -2125,7 +2124,6 @@ static void hci_ev_raw_rds_group_data(struct radio_hci_dev *hdev,
 
 	radio = video_get_drvdata(video_get_dev());
 	index = RDSGRP_DATA_OFFSET;
-
 	for (blocknum = 0; blocknum < RDS_BLOCKS_NUM; blocknum++) {
 		temp.rdsBlk[blocknum].rdsLsb =
 			(skb->data[index]);
@@ -2574,10 +2572,7 @@ static int set_low_power_mode(struct iris_device *radio, int power_mode)
 
 		if (power_mode) {
 			radio->event_mask = 0x00;
-			if (radio->af_jump_bit)
-				rds_grps_proc = 0x00 | AF_JUMP_ENABLE;
-			else
-				rds_grps_proc = 0x00;
+                        rds_grps_proc = 0x00;
 			retval = hci_fm_rds_grps_process(
 				&rds_grps_proc,
 				radio->fm_hdev);
@@ -2588,7 +2583,6 @@ static int set_low_power_mode(struct iris_device *radio, int power_mode)
 			retval = hci_conf_event_mask(&radio->event_mask,
 				radio->fm_hdev);
 		} else {
-
 			radio->event_mask = SIG_LEVEL_INTR |
 					RDS_SYNC_INTR | AUDIO_CTRL_INTR;
 			retval = hci_conf_event_mask(&radio->event_mask,
